@@ -21,6 +21,7 @@ import com.rk.terminal.ui.animations.NavigationAnimationTransitions
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
+import com.rk.terminal.ui.screens.home.HomeScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.Rootfs
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
@@ -76,7 +77,7 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
     ) {
 
         composable(MainActivityRoutes.MainScreen.route) {
-            if (Rootfs.isDownloaded.value){
+            if (Rootfs.isFullyInstalled.value){
                 val config = LocalConfiguration.current
                 if (Configuration.ORIENTATION_LANDSCAPE == config.orientation){
                     UpdateStatusBar(mainActivity, show = horizontal_statusBar.value)
@@ -96,6 +97,10 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         composable(MainActivityRoutes.Customization.route){
             UpdateStatusBar(mainActivity,show = true)
             Customization()
+        }
+        composable(MainActivityRoutes.Home.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            HomeScreen()
         }
     }
 }

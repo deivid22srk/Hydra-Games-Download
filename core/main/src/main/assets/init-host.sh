@@ -71,4 +71,9 @@ ARGS="$ARGS --link2symlink"
 ARGS="$ARGS --sysvipc"
 ARGS="$ARGS -L"
 
-$LINKER $PREFIX/local/bin/proot $ARGS sh $PREFIX/local/bin/init "$@"
+if [ "$1" = "exit" ]; then
+    shift
+    $LINKER $PREFIX/local/bin/proot $ARGS sh $PREFIX/local/bin/init exit
+else
+    $LINKER $PREFIX/local/bin/proot $ARGS sh $PREFIX/local/bin/init "$@"
+fi

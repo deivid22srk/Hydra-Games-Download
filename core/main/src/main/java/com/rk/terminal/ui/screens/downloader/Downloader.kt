@@ -8,15 +8,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavHostController
 import com.rk.libcommons.*
 import com.rk.resources.strings
 import com.rk.terminal.ui.activities.terminal.MainActivity
+import com.rk.terminal.ui.routes.MainActivityRoutes
+import com.rk.terminal.ui.screens.settings.WorkingMode
+import com.rk.terminal.ui.screens.terminal.MkSession
 import com.rk.terminal.ui.screens.terminal.Rootfs
+import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
+import com.termux.terminal.TerminalSession
+import com.termux.terminal.TerminalSessionClient
+import com.termux.view.TerminalView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,8 +48,16 @@ fun Downloader(
     var progressText by remember { mutableStateOf(installingStr) }
     var isSetupComplete by remember { mutableStateOf(false) }
     var needsDownload by remember { mutableStateOf(false) }
+    var terminalSession by remember { mutableStateOf<TerminalSession?>(null) }
+    var isInstalling by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        if (Rootfs.isFullyInstalled()) {
+            navController.navigate(MainActivityRoutes.Home.route) {
+                popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+            }
+            return@LaunchedEffect
+        }
 
         try {
             val abi = Build.SUPPORTED_ABIS.firstOrNull {
@@ -64,7 +81,7 @@ fun Downloader(
                     }
                 },
                 onComplete = {
-                    isSetupComplete = true
+                    isInstalling = true
                 },
                 onError = { error ->
                     toast(if (error is UnknownHostException) networkErrorStr else setupFailedStr.format(error.message))
@@ -77,15 +94,64 @@ fun Downloader(
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (!isSetupComplete) {
-            if (needsDownload) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                if (needsDownload || progress < 1f) {
                     Text(progressText, style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.height(16.dp))
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(0.8f))
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                if (isInstalling) {
+                    Text("Installing packages...", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .height(300.dp)
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                TerminalView(ctx, null).apply {
+                                            val backend = object : TerminalSessionClient by TerminalBackEnd(this, mainActivity) {
+                                        override fun onSessionFinished(finishedSession: TerminalSession) {
+                                            if (finishedSession.exitStatus == 0) {
+                                                Rootfs.reTerminal.child(".installed").createNewFile()
+                                                Rootfs.isFullyInstalled.value = true
+                                                isSetupComplete = true
+                                                mainActivity.runOnUiThread {
+                                                    navController.navigate(MainActivityRoutes.Home.route) {
+                                                        popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+                                                    }
+                                                }
+                                            } else {
+                                                mainActivity.runOnUiThread {
+                                                    toast("Installation failed with exit code ${finishedSession.exitStatus}")
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    val session = MkSession.createSession(
+                                        mainActivity,
+                                        backend,
+                                        "install_session",
+                                        WorkingMode.ALPINE
+                                    )
+                                    // Override arguments to run installation and exit
+                                    // The init.sh already does the apk install if packages are missing.
+                                    // We just need to trigger it and then exit.
+
+                                    terminalSession = session
+                                    attachSession(session)
+                                    setTerminalViewClient(TerminalBackEnd(this, mainActivity))
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
-        } else {
-            TerminalScreen(mainActivityActivity = mainActivity, navController = navController)
         }
     }
 }

@@ -114,7 +114,11 @@ object MkSession {
 
             val shell = if (pendingCommand == null) {
                 args = if (workingMode == WorkingMode.ALPINE){
-                    arrayOf("-c",initFile.absolutePath)
+                    if (session_id == "install_session") {
+                        arrayOf("-c", "${initFile.absolutePath} exit")
+                    } else {
+                        arrayOf("-c", initFile.absolutePath)
+                    }
                 }else{
                     arrayOf()
                 }
