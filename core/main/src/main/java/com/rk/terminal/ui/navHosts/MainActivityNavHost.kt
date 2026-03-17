@@ -22,6 +22,7 @@ import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
 import com.rk.terminal.ui.screens.home.HomeScreen
+import com.rk.terminal.ui.screens.home.HydraSourcesScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.Rootfs
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
@@ -101,6 +102,10 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         composable(MainActivityRoutes.Home.route) {
             UpdateStatusBar(mainActivity, show = true)
             HomeScreen()
+        }
+        composable(MainActivityRoutes.HydraSources.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            HydraSourcesScreen()
         }
     }
 }

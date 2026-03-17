@@ -183,6 +183,17 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
 
 
         PreferenceGroup {
+            SettingsCard(
+                title = { Text("Fontes Hydra") },
+                description = { Text("Gerenciar links de API do Hydra Launcher") },
+                endWidget = {
+                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
+                },
+                onClick = {
+                    navController.navigate(MainActivityRoutes.HydraSources.route)
+                }
+            )
+
             SettingsToggle(
                 label = stringResource(strings.customizations),
                 showSwitch = false,

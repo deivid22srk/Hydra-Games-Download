@@ -88,6 +88,7 @@ dependencies {
     api(project(":core:terminal-view"))
     api(project(":core:terminal-emulator"))
     api(libs.utilcode)
+    api(libs.gson)
     //api(libs.commons.net)
     api(libs.okhttp)
     api(libs.anrwatchdog)
