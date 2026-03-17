@@ -44,16 +44,16 @@ fun HomeScreen() {
     val performSearch = {
         if (searchQuery.isNotBlank()) {
             isSearching = true
-            val sources = Settings.hydraSources
+            val sources = Settings.hydraSources.filter { it.isEnabled }
             scope.launch {
                 val allGames = withContext(Dispatchers.IO) {
                     val list = mutableListOf<HydraGame>()
                     val client = OkHttpClient()
                     val gson = Gson()
 
-                    sources.forEach { url ->
+                    sources.forEach { config ->
                         try {
-                            val request = Request.Builder().url(url).build()
+                            val request = Request.Builder().url(config.url).build()
                             client.newCall(request).execute().use { response ->
                                 if (response.isSuccessful) {
                                     val body = response.body?.string()

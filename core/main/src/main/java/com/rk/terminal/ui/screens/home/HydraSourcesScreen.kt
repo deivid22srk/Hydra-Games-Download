@@ -20,9 +20,8 @@ import com.rk.components.compose.preferences.base.PreferenceLayout
 @Composable
 fun HydraSourcesScreen() {
     var sources by remember { mutableStateOf(Settings.hydraSources) }
-    var newSourceUrl by remember { mutableStateOf("") }
-
     var showAddDialog by remember { mutableStateOf(false) }
+    var newSourceUrl by remember { mutableStateOf("") }
 
     PreferenceLayout(label = "Fontes Hydra") {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -51,7 +50,7 @@ fun HydraSourcesScreen() {
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(sources) { url ->
+                    items(sources) { config ->
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -61,17 +60,29 @@ fun HydraSourcesScreen() {
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = url,
+                                        text = config.url,
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium,
                                         maxLines = 1
                                     )
                                 }
+
+                                Switch(
+                                    checked = config.isEnabled,
+                                    onCheckedChange = { isEnabled ->
+                                        val newList = sources.map {
+                                            if (it.url == config.url) it.copy(isEnabled = isEnabled) else it
+                                        }
+                                        Settings.hydraSources = newList
+                                        sources = newList
+                                    },
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+
                                 IconButton(onClick = {
-                                    val currentSources = Settings.hydraSources.toMutableList()
-                                    currentSources.remove(url)
-                                    Settings.hydraSources = currentSources
-                                    sources = currentSources
+                                    val newList = sources.filter { it.url != config.url }
+                                    Settings.hydraSources = newList
+                                    sources = newList
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
@@ -120,8 +131,8 @@ fun HydraSourcesScreen() {
                     Button(onClick = {
                         if (newSourceUrl.isNotBlank()) {
                             val currentSources = Settings.hydraSources.toMutableList()
-                            if (!currentSources.contains(newSourceUrl)) {
-                                currentSources.add(newSourceUrl)
+                            if (currentSources.none { it.url == newSourceUrl }) {
+                                currentSources.add(Settings.HydraSourceConfig(newSourceUrl))
                                 Settings.hydraSources = currentSources
                                 sources = currentSources
                             }

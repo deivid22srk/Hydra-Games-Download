@@ -98,19 +98,21 @@ object Settings {
         get() = Preference.getBoolean(key = "shortcuts_enabled", default = true)
         set(value) = Preference.setBoolean(key = "shortcuts_enabled", value)
 
-    var hydraSources: List<String>
+    data class HydraSourceConfig(val url: String, var isEnabled: Boolean = true)
+
+    var hydraSources: List<HydraSourceConfig>
         get() {
-            val json = Preference.getString(key = "hydra_sources", default = "[]")
+            val json = Preference.getString(key = "hydra_sources_v2", default = "[]")
             return try {
-                val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
-                com.google.gson.Gson().fromJson<List<String>>(json, type) ?: emptyList()
+                val type = object : com.google.gson.reflect.TypeToken<List<HydraSourceConfig>>() {}.type
+                com.google.gson.Gson().fromJson<List<HydraSourceConfig>>(json, type) ?: emptyList()
             } catch (e: Exception) {
                 emptyList()
             }
         }
         set(value) {
             val json = com.google.gson.Gson().toJson(value)
-            Preference.setString(key = "hydra_sources", value = json)
+            Preference.setString(key = "hydra_sources_v2", value = json)
         }
 
     var downloadPath: String
