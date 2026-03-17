@@ -28,7 +28,7 @@ import java.net.URLEncoder
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController) {
+fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     var searchQuery by remember { mutableStateOf("") }
     var games by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
@@ -122,6 +122,7 @@ fun HomeScreen(navController: NavController) {
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
+                                viewModel.setGame(game.title ?: "Unknown", game.uris ?: emptyList())
                                 val encodedTitle = URLEncoder.encode(game.title ?: "Unknown", "UTF-8")
                                 navController.navigate("game_details/$encodedTitle")
                             }

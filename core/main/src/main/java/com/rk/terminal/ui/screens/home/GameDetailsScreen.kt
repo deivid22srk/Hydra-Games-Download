@@ -27,19 +27,20 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import java.net.URLEncoder
 import androidx.lifecycle.lifecycleScope
-
+import com.rk.terminal.ui.routes.MainActivityRoutes
+import com.rk.terminal.ui.screens.settings.WorkingMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameDetailsScreen(
-    gameTitle: String,
-    gameUris: List<String>,
+    viewModel: SharedGameViewModel,
     navController: NavController,
     mainActivity: MainActivity
 ) {
+    val gameTitle = viewModel.selectedGameTitle
+    val gameUris = viewModel.selectedGameUris
     var coverUrl by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -51,7 +52,6 @@ fun GameDetailsScreen(
                     val client = OkHttpClient()
                     val gson = Gson()
 
-                    // 1. Search for game ID
                     val searchRequest = Request.Builder()
                         .url("https://www.steamgriddb.com/api/v2/search/autocomplete/${URLEncoder.encode(gameTitle, "UTF-8")}")
                         .addHeader("Authorization", "Bearer $apiKey")
@@ -64,7 +64,6 @@ fun GameDetailsScreen(
                             val gameId = searchData.data.firstOrNull()?.id
 
                             if (gameId != null) {
-                                // 2. Get grids (covers)
                                 val gridRequest = Request.Builder()
                                     .url("https://www.steamgriddb.com/api/v2/grids/game/$gameId")
                                     .addHeader("Authorization", "Bearer $apiKey")
@@ -135,44 +134,47 @@ fun GameDetailsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(
-                text = "Links de Download",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (gameUris.isNotEmpty()) {
+                Text(
+                    text = "Links de Download",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            gameUris.forEach { uri ->
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                gameUris.forEach { uri ->
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = uri, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                            val isGoFile = uri.contains("gofile.io")
-                            Text(
-                                text = if (isGoFile) "Download via GoFileDownloader" else "Download Direto",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isGoFile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                        IconButton(onClick = {
-                            if (uri.contains("gofile.io")) {
-                                triggerGoFileDownload(uri, mainActivity)
-                                navController.popBackStack()
-                                // TODO: Switch to terminal tab automatically?
-                            } else {
-                                // Direct download or open in browser
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = uri, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                val isGoFile = uri.contains("gofile.io")
+                                Text(
+                                    text = if (isGoFile) "Download via GoFileDownloader" else "Download Direto",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isGoFile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                )
                             }
-                        }) {
-                            Icon(Icons.Default.Download, contentDescription = "Download")
+                            IconButton(onClick = {
+                                if (uri.contains("gofile.io")) {
+                                    triggerGoFileDownload(uri, mainActivity)
+                                    // Switch to terminal would be better here
+                                } else {
+                                    // Handle direct link
+                                }
+                            }) {
+                                Icon(Icons.Default.Download, contentDescription = "Download")
+                            }
                         }
                     }
                 }
+            } else {
+                Text("Nenhum link de download disponível para este jogo.")
             }
         }
     }
@@ -180,16 +182,45 @@ fun GameDetailsScreen(
 
 fun triggerGoFileDownload(url: String, activity: MainActivity) {
     val downloadPath = Settings.downloadPath
-    val command = "cd ~/GoFileDownloader && python3 main.py --custom-path \"$downloadPath\""
-    // We need a way to send this to the terminal.
-    // For now, we'll write it to a URLs.txt and run main.py
 
     activity.lifecycleScope.launch(Dispatchers.IO) {
-        val urlsFile = java.io.File(activity.filesDir, "local/alpine/root/GoFileDownloader/URLs.txt")
-        urlsFile.writeText(url)
+        try {
+            // 1. Write URL to URLs.txt
+            val rootfsDir = java.io.File(activity.filesDir, "local/alpine")
+            val downloaderDir = java.io.File(rootfsDir, "root/GoFileDownloader")
+            if (!downloaderDir.exists()) downloaderDir.mkdirs()
 
-        // This is a bit of a hack, but we can't easily "inject" into an existing session
-        // without more infrastructure. We'll just assume the terminal can be told to run this.
-        // In a real implementation, we'd use a broadcast or a shared state.
+            val urlsFile = java.io.File(downloaderDir, "URLs.txt")
+            urlsFile.writeText(url + "\n")
+
+            // 2. Prepare command
+            val cmd = "cd ~/GoFileDownloader && python3 main.py --custom-path \"$downloadPath\"\n"
+
+            withContext(Dispatchers.Main) {
+                // 3. Find or create a download session
+                val service = activity.sessionBinder?.getService()
+                if (service != null) {
+                    val sessionId = "GoFileDownload"
+                    var session = activity.sessionBinder?.getSession(sessionId)
+
+                    if (session == null) {
+                        // Create a dummy client for the background session
+                        val dummyView = com.termux.view.TerminalView(activity, null)
+                        val client = TerminalBackEnd(dummyView, activity)
+                        session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE)
+                    }
+
+                    // 4. Inject command
+                    session?.write(cmd)
+
+                    // 5. Notify user
+                    activity.runOnUiThread {
+                        android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

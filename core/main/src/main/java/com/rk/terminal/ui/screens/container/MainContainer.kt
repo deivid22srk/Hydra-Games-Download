@@ -17,10 +17,13 @@ import com.rk.terminal.ui.screens.home.HomeScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
 
+import com.rk.terminal.ui.screens.home.SharedGameViewModel
+
 @Composable
 fun MainContainer(
     mainActivity: MainActivity,
-    navController: NavController
+    navController: NavController,
+    sharedGameViewModel: SharedGameViewModel
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -51,7 +54,7 @@ fun MainContainer(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (selectedTab) {
-                0 -> HomeScreen(navController = navController)
+                0 -> HomeScreen(navController = navController, viewModel = sharedGameViewModel)
                 1 -> TerminalScreen(mainActivityActivity = mainActivity, navController = navController)
                 2 -> Settings(navController = navController, mainActivity = mainActivity)
             }
