@@ -25,7 +25,7 @@ import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.launch
 
 data class HydraGame(
-    @SerializedName("name") val name: String,
+    @SerializedName("name") val name: String? = null,
     @SerializedName("uris") val uris: List<String>? = null
 )
 
@@ -68,25 +68,32 @@ fun HomeScreen() {
                     list
                 }
 
-                val filtered = allGames.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                val filtered = allGames.filter { it.name?.contains(searchQuery, ignoreCase = true) == true }
                 games = filtered
                 isSearching = false
             }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-        Surface(
-            tonalElevation = 4.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Buscar Jogos",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Buscar Jogos",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+            )
+        }
+    ) { innerPadding ->
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            Box(modifier = Modifier.padding(16.dp)) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -105,69 +112,69 @@ fun HomeScreen() {
                     }
                 )
             }
-        }
 
-        if (isSearching) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(games) { game ->
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { /* Add action like viewing details or downloading */ }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = MaterialTheme.shapes.small,
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Gamepad, contentDescription = null)
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = game.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                game.uris?.firstOrNull()?.let {
-                                    Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
+            if (isSearching) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-
-                if (games.isEmpty() && searchQuery.isNotEmpty()) {
-                    item {
-                        Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Nenhum jogo encontrado.", style = MaterialTheme.typography.bodyLarge)
-                                Text("Tente outro nome ou adicione mais fontes.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(games) { game ->
+                        ElevatedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { /* Add action */ }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Gamepad, contentDescription = null)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = game.name ?: "Sem nome",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    game.uris?.firstOrNull()?.let {
+                                        Text(
+                                            text = it,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                } else if (games.isEmpty() && searchQuery.isEmpty()) {
-                    item {
-                        Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Use a barra de pesquisa para buscar jogos.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    if (games.isEmpty() && searchQuery.isNotEmpty()) {
+                        item {
+                            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Nenhum jogo encontrado.", style = MaterialTheme.typography.bodyLarge)
+                                    Text("Tente outro nome ou adicione mais fontes.", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    } else if (games.isEmpty() && searchQuery.isEmpty()) {
+                        item {
+                            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Use a barra de pesquisa para buscar jogos.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }

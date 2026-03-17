@@ -111,8 +111,6 @@ object Settings {
         set(value) {
             val json = com.google.gson.Gson().toJson(value)
             Preference.setString(key = "hydra_sources", value = json)
-            Preference.removeKey("hydra_sources") // Force cache clear
-            Preference.setString(key = "hydra_sources", value = json)
         }
 
     var downloadPath: String
@@ -217,7 +215,6 @@ object Preference {
         }.onFailure {
             it.printStackTrace()
         }
-
     }
 
     fun getInt(key: String, default: Int): Int {

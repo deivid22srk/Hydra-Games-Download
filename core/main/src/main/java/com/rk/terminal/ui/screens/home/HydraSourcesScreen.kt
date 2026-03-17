@@ -19,10 +19,8 @@ import com.rk.components.compose.preferences.base.PreferenceLayout
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HydraSourcesScreen() {
+    // Force recomposition when Settings.hydraSources changes
     var sources by remember { mutableStateOf(Settings.hydraSources) }
-    LaunchedEffect(Unit) {
-        sources = Settings.hydraSources
-    }
     var showAddDialog by remember { mutableStateOf(false) }
     var newSourceUrl by remember { mutableStateOf("") }
 
@@ -70,10 +68,10 @@ fun HydraSourcesScreen() {
                                     )
                                 }
                                 IconButton(onClick = {
-                                    val newList = sources.toMutableList()
+                                    val newList = Settings.hydraSources.toMutableList()
                                     newList.remove(url)
-                                    sources = newList
                                     Settings.hydraSources = newList
+                                    sources = newList
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
@@ -121,11 +119,11 @@ fun HydraSourcesScreen() {
                 confirmButton = {
                     Button(onClick = {
                         if (newSourceUrl.isNotBlank()) {
-                            val newList = sources.toMutableList()
+                            val newList = Settings.hydraSources.toMutableList()
                             if (!newList.contains(newSourceUrl)) {
                                 newList.add(newSourceUrl)
-                                sources = newList
                                 Settings.hydraSources = newList
+                                sources = newList
                             }
                             newSourceUrl = ""
                             showAddDialog = false
