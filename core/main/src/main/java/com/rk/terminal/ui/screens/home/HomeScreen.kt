@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material3.*
@@ -11,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.rk.settings.Settings
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +41,40 @@ fun HomeScreen() {
     var isSearching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    val performSearch = {
+        if (searchQuery.isNotBlank()) {
+            isSearching = true
+            val sources = Settings.hydraSources
+            scope.launch {
+                val allGames = withContext(Dispatchers.IO) {
+                    val list = mutableListOf<HydraGame>()
+                    val client = OkHttpClient()
+                    val gson = Gson()
+
+                    sources.forEach { url ->
+                        try {
+                            val request = Request.Builder().url(url).build()
+                            client.newCall(request).execute().use { response ->
+                                if (response.isSuccessful) {
+                                    val body = response.body?.string()
+                                    val source = gson.fromJson(body, HydraSource::class.java)
+                                    source.downloads?.let { list.addAll(it) }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    list
+                }
+
+                val filtered = allGames.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                games = filtered
+                isSearching = false
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         Surface(
             tonalElevation = 4.dp,
@@ -57,39 +94,11 @@ fun HomeScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { performSearch() }),
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
-                            TextButton(onClick = {
-                                isSearching = true
-                                val sources = Settings.hydraSources
-                                scope.launch {
-                                    val allGames = withContext(Dispatchers.IO) {
-                                        val list = mutableListOf<HydraGame>()
-                                        val client = OkHttpClient()
-                                        val gson = Gson()
-
-                                        sources.forEach { url ->
-                                            try {
-                                                val request = Request.Builder().url(url).build()
-                                                client.newCall(request).execute().use { response ->
-                                                    if (response.isSuccessful) {
-                                                        val body = response.body?.string()
-                                                        val source = gson.fromJson(body, HydraSource::class.java)
-                                                        source.downloads?.let { list.addAll(it) }
-                                                    }
-                                                }
-                                            } catch (e: Exception) {
-                                                e.printStackTrace()
-                                            }
-                                        }
-                                        list
-                                    }
-
-                                    val filtered = allGames.filter { it.name.contains(searchQuery, ignoreCase = true) }
-                                    games = filtered
-                                    isSearching = false
-                                }
-                            }) {
+                            TextButton(onClick = performSearch) {
                                 Text("BUSCAR")
                             }
                         }

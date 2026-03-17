@@ -20,6 +20,9 @@ import com.rk.components.compose.preferences.base.PreferenceLayout
 @Composable
 fun HydraSourcesScreen() {
     var sources by remember { mutableStateOf(Settings.hydraSources) }
+    LaunchedEffect(Unit) {
+        sources = Settings.hydraSources
+    }
     var showAddDialog by remember { mutableStateOf(false) }
     var newSourceUrl by remember { mutableStateOf("") }
 

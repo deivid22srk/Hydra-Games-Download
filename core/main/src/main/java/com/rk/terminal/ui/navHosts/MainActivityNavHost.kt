@@ -24,6 +24,7 @@ import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
 import com.rk.terminal.ui.screens.home.HomeScreen
 import com.rk.terminal.ui.screens.home.HydraSourcesScreen
+import com.rk.terminal.ui.screens.settings.FolderPickerScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.Rootfs
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
@@ -107,6 +108,10 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         composable(MainActivityRoutes.HydraSources.route) {
             UpdateStatusBar(mainActivity, show = true)
             HydraSourcesScreen()
+        }
+        composable(MainActivityRoutes.FolderPicker.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            FolderPickerScreen(navController = navController)
         }
     }
 }

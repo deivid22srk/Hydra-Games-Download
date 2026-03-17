@@ -64,7 +64,7 @@ fun Downloader(
 
     LaunchedEffect(Unit) {
         if (Rootfs.isFullyInstalled()) {
-            navController.navigate(MainActivityRoutes.Home.route) {
+            navController.navigate(MainActivityRoutes.MainScreen.route) {
                 popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
             }
             return@LaunchedEffect
