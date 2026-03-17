@@ -184,7 +184,7 @@ fun Downloader(
                                                 Rootfs.isFullyInstalled.value = true
                                                 isSetupComplete = true
                                                 mainActivity.runOnUiThread {
-                                                    navController.navigate(MainActivityRoutes.Home.route) {
+                                                    navController.navigate(MainActivityRoutes.MainScreen.route) {
                                                         popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
                                                     }
                                                 }

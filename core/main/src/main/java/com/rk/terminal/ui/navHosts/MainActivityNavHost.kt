@@ -19,6 +19,7 @@ import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.animations.NavigationAnimationTransitions
 import com.rk.terminal.ui.routes.MainActivityRoutes
+import com.rk.terminal.ui.screens.container.MainContainer
 import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
 import com.rk.terminal.ui.screens.home.HomeScreen
@@ -86,7 +87,7 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
                     UpdateStatusBar(mainActivity, show = showStatusBar.value)
                 }
 
-                TerminalScreen(mainActivityActivity = mainActivity, navController = navController)
+                MainContainer(mainActivity = mainActivity, navController = navController)
             }else{
                 Downloader(mainActivity = mainActivity, navController = navController)
             }
