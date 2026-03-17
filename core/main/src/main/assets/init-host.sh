@@ -3,6 +3,7 @@ ALPINE_DIR=$PREFIX/local/alpine
 mkdir -p $ALPINE_DIR
 
 if [ -z "$(ls -A "$ALPINE_DIR" | grep -vE '^(root|tmp)$')" ]; then
+    echo "[*] Extracting alpine rootfs..."
     tar -xf "$PREFIX/files/alpine.tar.gz" -C "$ALPINE_DIR"
 fi
 
