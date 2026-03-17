@@ -28,27 +28,31 @@ android {
         create("release") {
             val isGITHUB_ACTION = System.getenv("GITHUB_ACTIONS") == "true"
             
-            val propertiesFilePath = if (isGITHUB_ACTION) {
-                "/tmp/signing.properties"
+            val propertiesFile = if (isGITHUB_ACTION) {
+                val tmpFile = File("/tmp/signing.properties")
+                if (tmpFile.exists() && tmpFile.length() > 0) tmpFile else File(projectDir, "signing.properties")
             } else {
-                "/home/rohit/Android/xed-signing/signing.properties"
+                val localFile = File(projectDir, "signing.properties")
+                if (localFile.exists()) localFile else File("/home/rohit/Android/xed-signing/signing.properties")
             }
             
-            val propertiesFile = File(propertiesFilePath)
             if (propertiesFile.exists()) {
                 val properties = Properties()
                 properties.load(propertiesFile.inputStream())
                 keyAlias = properties["keyAlias"] as String?
                 keyPassword = properties["keyPassword"] as String?
+                
+                val storeFileName = properties["storeFile"] as String?
                 storeFile = if (isGITHUB_ACTION) {
-                    File("/tmp/xed.keystore")
+                    val tmpKeystore = File("/tmp/xed.keystore")
+                    if (tmpKeystore.exists() && tmpKeystore.length() > 0) tmpKeystore else File(projectDir, storeFileName ?: "release.keystore")
                 } else {
-                    (properties["storeFile"] as String?)?.let { File(it) }
+                    storeFileName?.let { File(projectDir, it) } ?: File(projectDir, "release.keystore")
                 }
                 
                 storePassword = properties["storePassword"] as String?
             } else {
-                println("Signing properties file not found at $propertiesFilePath")
+                println("Signing properties file not found at ${propertiesFile.absolutePath}")
             }
         }
         getByName("debug") {
@@ -118,8 +122,8 @@ android {
         compose = true
     }
     
-    kotlinOptions {
-        jvmTarget = "17"
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.15"
