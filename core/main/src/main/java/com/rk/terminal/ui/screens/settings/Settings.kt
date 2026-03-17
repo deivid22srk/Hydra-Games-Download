@@ -31,6 +31,8 @@ import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.components.SettingsToggle
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import androidx.core.net.toUri
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Source
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -127,6 +129,19 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
                 })
         }
 
+        PreferenceGroup(heading = "Download") {
+            SettingsCard(
+                title = { Text("Pasta de Download") },
+                description = { Text(Settings.downloadPath) },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                onClick = {
+                    navController.navigate(MainActivityRoutes.FolderPicker.route)
+                }
+            )
+        }
+
         PreferenceGroup(heading = stringResource(strings.input_mode)) {
 
             SettingsCard(
@@ -182,10 +197,13 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
         }
 
 
-        PreferenceGroup {
+        PreferenceGroup(heading = "Hydra") {
             SettingsCard(
                 title = { Text("Fontes Hydra") },
                 description = { Text("Gerenciar links de API do Hydra Launcher") },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.Source, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
                 endWidget = {
                     Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
                 },

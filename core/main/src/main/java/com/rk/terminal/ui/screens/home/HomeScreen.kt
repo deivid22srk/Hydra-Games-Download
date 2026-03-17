@@ -5,10 +5,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Gamepad
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rk.settings.Settings
 import kotlinx.coroutines.Dispatchers
@@ -36,74 +38,109 @@ fun HomeScreen() {
     var isSearching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(16.dp)) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            label = { Text("Pesquisar jogo") },
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                IconButton(onClick = {
-                    if (searchQuery.isNotBlank()) {
-                        isSearching = true
-                        val sources = Settings.hydraSources
-                        scope.launch {
-                            val allGames = withContext(Dispatchers.IO) {
-                                val list = mutableListOf<HydraGame>()
-                                val client = OkHttpClient()
-                                val gson = Gson()
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        Surface(
+            tonalElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Buscar Jogos",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Digite o nome do jogo...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            TextButton(onClick = {
+                                isSearching = true
+                                val sources = Settings.hydraSources
+                                scope.launch {
+                                    val allGames = withContext(Dispatchers.IO) {
+                                        val list = mutableListOf<HydraGame>()
+                                        val client = OkHttpClient()
+                                        val gson = Gson()
 
-                                sources.forEach { url ->
-                                    try {
-                                        val request = Request.Builder().url(url).build()
-                                        client.newCall(request).execute().use { response ->
-                                            if (response.isSuccessful) {
-                                                val body = response.body?.string()
-                                                val source = gson.fromJson(body, HydraSource::class.java)
-                                                source.downloads?.let { list.addAll(it) }
+                                        sources.forEach { url ->
+                                            try {
+                                                val request = Request.Builder().url(url).build()
+                                                client.newCall(request).execute().use { response ->
+                                                    if (response.isSuccessful) {
+                                                        val body = response.body?.string()
+                                                        val source = gson.fromJson(body, HydraSource::class.java)
+                                                        source.downloads?.let { list.addAll(it) }
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
                                             }
                                         }
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
+                                        list
                                     }
-                                }
-                                list
-                            }
 
-                            val filtered = allGames.filter { it.name.contains(searchQuery, ignoreCase = true) }
-                            games = filtered
-                            isSearching = false
+                                    val filtered = allGames.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                                    games = filtered
+                                    isSearching = false
+                                }
+                            }) {
+                                Text("BUSCAR")
+                            }
                         }
                     }
-                }) {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
-                }
+                )
             }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
+        }
 
         if (isSearching) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 items(games) { game ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { /* Add action like viewing details or downloading */ }
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = game.name, style = MaterialTheme.typography.titleMedium)
-                            game.uris?.firstOrNull()?.let {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Gamepad, contentDescription = null)
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
+                                    text = game.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
                                 )
+                                game.uris?.firstOrNull()?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
@@ -111,8 +148,17 @@ fun HomeScreen() {
 
                 if (games.isEmpty() && searchQuery.isNotEmpty()) {
                     item {
-                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text("Nenhum jogo encontrado.")
+                        Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Nenhum jogo encontrado.", style = MaterialTheme.typography.bodyLarge)
+                                Text("Tente outro nome ou adicione mais fontes.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                } else if (games.isEmpty() && searchQuery.isEmpty()) {
+                    item {
+                        Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Use a barra de pesquisa para buscar jogos.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }

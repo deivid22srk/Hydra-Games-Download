@@ -113,6 +113,10 @@ object Settings {
             Preference.setString(key = "hydra_sources", value = json)
         }
 
+    var downloadPath: String
+        get() = Preference.getString(key = "download_path", default = "/sdcard/Download")
+        set(value) = Preference.setString(key = "download_path", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

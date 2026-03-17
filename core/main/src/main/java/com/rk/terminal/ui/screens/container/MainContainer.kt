@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,7 +22,7 @@ fun MainContainer(
     mainActivity: MainActivity,
     navController: NavController
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -38,7 +38,7 @@ fun MainContainer(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     label = { Text("Terminal") },
-                    icon = { Icon(Icons.Default.Info, contentDescription = null) }
+                    icon = { Icon(Icons.Default.Terminal, contentDescription = null) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
