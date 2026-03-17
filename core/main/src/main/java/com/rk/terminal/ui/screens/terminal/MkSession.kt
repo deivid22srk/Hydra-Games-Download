@@ -43,19 +43,16 @@ object MkSession {
 
             val initFile: File = localBinDir().child("init-host")
 
-            if (initFile.exists().not()){
-                initFile.createFileIfNot()
-                initFile.writeText(assets.open("init-host.sh").bufferedReader().use { it.readText() })
-            }
-            initFile.setExecutable(true)
+            // always update scripts to ensure they are correct
+            initFile.createFileIfNot()
+            initFile.writeText(assets.open("init-host.sh").bufferedReader().use { it.readText() }.replace("\r\n", "\n"))
+            initFile.setExecutable(true, false)
 
 
             localBinDir().child("init").apply {
-                if (exists().not()){
-                    createFileIfNot()
-                    writeText(assets.open("init.sh").bufferedReader().use { it.readText() })
-                }
-                setExecutable(true)
+                createFileIfNot()
+                writeText(assets.open("init.sh").bufferedReader().use { it.readText() }.replace("\r\n", "\n"))
+                setExecutable(true, false)
             }
 
 
@@ -117,12 +114,12 @@ object MkSession {
             val shell = if (pendingCommand == null) {
                 args = if (workingMode == WorkingMode.ALPINE){
                     if (session_id == "install_session") {
-                        arrayOf(initFile.absolutePath, "exit")
+                        arrayOf("/system/bin/sh", initFile.absolutePath, "exit")
                     } else {
-                        arrayOf(initFile.absolutePath)
+                        arrayOf("/system/bin/sh", initFile.absolutePath)
                     }
                 }else{
-                    arrayOf()
+                    arrayOf("/system/bin/sh")
                 }
                 "/system/bin/sh"
             } else{

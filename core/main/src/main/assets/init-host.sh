@@ -1,7 +1,7 @@
-#!/bin/sh
-ALPINE_DIR=$PREFIX/local/alpine
+#!/system/bin/sh
+ALPINE_DIR="$PREFIX/local/alpine"
 
-mkdir -p $ALPINE_DIR
+mkdir -p "$ALPINE_DIR"
 
 if [ -z "$(ls -A "$ALPINE_DIR" | grep -vE '^(root|tmp)$')" ]; then
     echo "[*] Extracting alpine rootfs..."
@@ -9,33 +9,27 @@ if [ -z "$(ls -A "$ALPINE_DIR" | grep -vE '^(root|tmp)$')" ]; then
 fi
 
 if [ ! -e "$PREFIX/local/bin/proot" ]; then
-    cp "$PREFIX/files/proot" "$PREFIX/local/bin"
-    chmod +x "$PREFIX/local/bin/proot"
+    cp "$PREFIX/files/proot" "$PREFIX/local/bin/"
 fi
+chmod +x "$PREFIX/local/bin/proot"
 
 for sofile in "$PREFIX/files/"*.so.2; do
     dest="$PREFIX/local/lib/$(basename "$sofile")"
     if [ ! -e "$dest" ]; then
         cp "$sofile" "$dest"
-        chmod +x "$dest"
     fi
+    chmod +x "$dest"
 done
-
 
 ARGS="--kill-on-exit"
 ARGS="$ARGS -w /"
 
-for system_mnt in /apex /odm /product /system /system_ext /vendor \
- /linkerconfig/ld.config.txt \
- /linkerconfig/com.android.art/ld.config.txt \
- /plat_property_contexts /property_contexts; do
-
- if [ -e "$system_mnt" ]; then
-  system_mnt=$(realpath "$system_mnt")
-  ARGS="$ARGS -b ${system_mnt}"
- fi
+for system_mnt in /apex /odm /product /system /system_ext /vendor /linkerconfig/ld.config.txt /linkerconfig/com.android.art/ld.config.txt /plat_property_contexts /property_contexts; do
+    if [ -e "$system_mnt" ]; then
+        system_mnt=$(realpath "$system_mnt")
+        ARGS="$ARGS -b ${system_mnt}"
+    fi
 done
-unset system_mnt
 
 ARGS="$ARGS -b /sdcard"
 ARGS="$ARGS -b /storage"
@@ -63,13 +57,12 @@ if [ -e "/proc/self/fd/2" ]; then
   ARGS="$ARGS -b /proc/self/fd/2:/dev/stderr"
 fi
 
-
 ARGS="$ARGS -b $PREFIX"
 ARGS="$ARGS -b /sys"
 
 if [ ! -d "$PREFIX/local/alpine/tmp" ]; then
- mkdir -p "$PREFIX/local/alpine/tmp"
- chmod 1777 "$PREFIX/local/alpine/tmp"
+    mkdir -p "$PREFIX/local/alpine/tmp"
+    chmod 1777 "$PREFIX/local/alpine/tmp"
 fi
 ARGS="$ARGS -b $PREFIX/local/alpine/tmp:/dev/shm"
 
@@ -81,7 +74,7 @@ ARGS="$ARGS -L"
 
 if [ "$1" = "exit" ]; then
     shift
-    $LINKER $PREFIX/local/bin/proot $ARGS sh $PREFIX/local/bin/init exit
+    "$LINKER" "$PREFIX/local/bin/proot" $ARGS /system/bin/sh "$PREFIX/local/bin/init" exit
 else
-    $LINKER $PREFIX/local/bin/proot $ARGS sh $PREFIX/local/bin/init "$@"
+    "$LINKER" "$PREFIX/local/bin/proot" $ARGS /system/bin/sh "$PREFIX/local/bin/init" "$@"
 fi
