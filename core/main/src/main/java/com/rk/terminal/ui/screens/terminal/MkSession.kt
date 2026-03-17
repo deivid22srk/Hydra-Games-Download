@@ -46,6 +46,7 @@ object MkSession {
             if (initFile.exists().not()){
                 initFile.createFileIfNot()
                 initFile.writeText(assets.open("init-host.sh").bufferedReader().use { it.readText() })
+                initFile.setExecutable(true)
             }
 
 
@@ -53,6 +54,7 @@ object MkSession {
                 if (exists().not()){
                     createFileIfNot()
                     writeText(assets.open("init.sh").bufferedReader().use { it.readText() })
+                    setExecutable(true)
                 }
             }
 

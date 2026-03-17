@@ -1,3 +1,4 @@
+#!/bin/sh
 ALPINE_DIR=$PREFIX/local/alpine
 
 mkdir -p $ALPINE_DIR
@@ -7,11 +8,17 @@ if [ -z "$(ls -A "$ALPINE_DIR" | grep -vE '^(root|tmp)$')" ]; then
     tar -xf "$PREFIX/files/alpine.tar.gz" -C "$ALPINE_DIR"
 fi
 
-[ ! -e "$PREFIX/local/bin/proot" ] && cp "$PREFIX/files/proot" "$PREFIX/local/bin"
+if [ ! -e "$PREFIX/local/bin/proot" ]; then
+    cp "$PREFIX/files/proot" "$PREFIX/local/bin"
+    chmod +x "$PREFIX/local/bin/proot"
+fi
 
 for sofile in "$PREFIX/files/"*.so.2; do
     dest="$PREFIX/local/lib/$(basename "$sofile")"
-    [ ! -e "$dest" ] && cp "$sofile" "$dest"
+    if [ ! -e "$dest" ]; then
+        cp "$sofile" "$dest"
+        chmod +x "$dest"
+    fi
 done
 
 
