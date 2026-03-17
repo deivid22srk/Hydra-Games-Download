@@ -19,10 +19,10 @@ import com.rk.components.compose.preferences.base.PreferenceLayout
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HydraSourcesScreen() {
-    // Force recomposition when Settings.hydraSources changes
     var sources by remember { mutableStateOf(Settings.hydraSources) }
-    var showAddDialog by remember { mutableStateOf(false) }
     var newSourceUrl by remember { mutableStateOf("") }
+
+    var showAddDialog by remember { mutableStateOf(false) }
 
     PreferenceLayout(label = "Fontes Hydra") {
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -68,10 +68,10 @@ fun HydraSourcesScreen() {
                                     )
                                 }
                                 IconButton(onClick = {
-                                    val newList = Settings.hydraSources.toMutableList()
-                                    newList.remove(url)
-                                    Settings.hydraSources = newList
-                                    sources = newList
+                                    val currentSources = Settings.hydraSources.toMutableList()
+                                    currentSources.remove(url)
+                                    Settings.hydraSources = currentSources
+                                    sources = currentSources
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
@@ -119,11 +119,11 @@ fun HydraSourcesScreen() {
                 confirmButton = {
                     Button(onClick = {
                         if (newSourceUrl.isNotBlank()) {
-                            val newList = Settings.hydraSources.toMutableList()
-                            if (!newList.contains(newSourceUrl)) {
-                                newList.add(newSourceUrl)
-                                Settings.hydraSources = newList
-                                sources = newList
+                            val currentSources = Settings.hydraSources.toMutableList()
+                            if (!currentSources.contains(newSourceUrl)) {
+                                currentSources.add(newSourceUrl)
+                                Settings.hydraSources = currentSources
+                                sources = currentSources
                             }
                             newSourceUrl = ""
                             showAddDialog = false

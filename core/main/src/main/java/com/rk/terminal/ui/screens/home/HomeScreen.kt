@@ -25,7 +25,7 @@ import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.launch
 
 data class HydraGame(
-    @SerializedName("name") val name: String? = null,
+    @SerializedName("title") val title: String? = null,
     @SerializedName("uris") val uris: List<String>? = null
 )
 
@@ -57,8 +57,10 @@ fun HomeScreen() {
                             client.newCall(request).execute().use { response ->
                                 if (response.isSuccessful) {
                                     val body = response.body?.string()
-                                    val source = gson.fromJson(body, HydraSource::class.java)
-                                    source.downloads?.let { list.addAll(it) }
+                                    if (!body.isNullOrBlank()) {
+                                        val source = gson.fromJson(body, HydraSource::class.java)
+                                        source?.downloads?.filterNotNull()?.let { list.addAll(it) }
+                                    }
                                 }
                             }
                         } catch (e: Exception) {
@@ -68,7 +70,7 @@ fun HomeScreen() {
                     list
                 }
 
-                val filtered = allGames.filter { it.name?.contains(searchQuery, ignoreCase = true) == true }
+                val filtered = allGames.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
                 games = filtered
                 isSearching = false
             }
@@ -144,7 +146,7 @@ fun HomeScreen() {
                                 Spacer(modifier = Modifier.width(16.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = game.name ?: "Sem nome",
+                                        text = game.title ?: "Sem nome",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
