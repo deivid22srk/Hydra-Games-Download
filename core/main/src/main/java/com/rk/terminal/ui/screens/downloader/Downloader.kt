@@ -81,13 +81,19 @@ fun Downloader(
                 "alpine.tar.gz" to abiMap[abi]!!.alpine
             ).map { (name, url) -> DownloadFile(url, Rootfs.reTerminal.child(name)) }
 
-            needsDownload = filesToDownload.any { !it.outputFile.exists() }
+            val assets = context.assets
+            val assetList = try { assets.list("prebuilt/$abi")?.toList() ?: emptyList() } catch (e: Exception) { emptyList() }
+            val assetsAvailable = "proot" in assetList && "libtalloc.so.2" in assetList && "alpine.tar.gz" in assetList
+
+            needsDownload = filesToDownload.any { !it.outputFile.exists() } && !assetsAvailable
 
             if (!needsDownload) {
                 currentStep = 1
             }
 
             setupEnvironment(
+                context,
+                abi,
                 filesToDownload,
                 onProgress = { completed, total, currentProgress ->
                     if (needsDownload) {
@@ -252,6 +258,8 @@ fun StepItem(title: String, isActive: Boolean, isCompleted: Boolean) {
 private data class DownloadFile(val url: String, val outputFile: File)
 
 private suspend fun setupEnvironment(
+    context: Context,
+    abi: String,
     filesToDownload: List<DownloadFile>,
     onProgress: (Int, Int, Float) -> Unit,
     onComplete: () -> Unit,
@@ -265,8 +273,26 @@ private suspend fun setupEnvironment(
             filesToDownload.forEach { file ->
                 val outputFile = file.outputFile.apply { parentFile?.mkdirs() }
                 if (!outputFile.exists()) {
-                    downloadFile(file.url, outputFile) { downloaded, total ->
-                        runOnUiThread { onProgress(completedFiles, totalFiles, downloaded.toFloat() / total) }
+                    val assetPath = "prebuilt/$abi/${outputFile.name}"
+                    val assets = context.assets
+                    val isBundled = try {
+                        assets.open(assetPath).use { true }
+                    } catch (e: Exception) {
+                        false
+                    }
+
+                    if (isBundled) {
+                        withContext(Dispatchers.IO) {
+                            assets.open(assetPath).use { input ->
+                                outputFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        }
+                    } else {
+                        downloadFile(file.url, outputFile) { downloaded, total ->
+                            runOnUiThread { onProgress(completedFiles, totalFiles, downloaded.toFloat() / total) }
+                        }
                     }
                 }
                 completedFiles++
