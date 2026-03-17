@@ -22,6 +22,7 @@ import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.container.MainContainer
 import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
+import com.rk.terminal.ui.screens.home.GameDetailsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
 import com.rk.terminal.ui.screens.home.HydraSourcesScreen
 import com.rk.terminal.ui.screens.settings.FolderPickerScreen
@@ -103,7 +104,7 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         }
         composable(MainActivityRoutes.Home.route) {
             UpdateStatusBar(mainActivity, show = true)
-            HomeScreen()
+            HomeScreen(navController = navController)
         }
         composable(MainActivityRoutes.HydraSources.route) {
             UpdateStatusBar(mainActivity, show = true)
@@ -112,6 +113,17 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         composable(MainActivityRoutes.FolderPicker.route) {
             UpdateStatusBar(mainActivity, show = true)
             FolderPickerScreen(navController = navController)
+        }
+        composable(MainActivityRoutes.GameDetails.route) { backStackEntry ->
+            UpdateStatusBar(mainActivity, show = true)
+            val gameTitle = backStackEntry.arguments?.getString("title") ?: ""
+            // In a more robust implementation, uris should be passed via a shared ViewModel or serialized
+            GameDetailsScreen(
+                gameTitle = gameTitle,
+                gameUris = emptyList(), // Placeholder
+                navController = navController,
+                mainActivity = mainActivity
+            )
         }
     }
 }

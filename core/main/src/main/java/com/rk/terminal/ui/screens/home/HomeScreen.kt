@@ -15,27 +15,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import com.rk.settings.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.launch
+import java.net.URLEncoder
 
-data class HydraGame(
-    @SerializedName("title") val title: String? = null,
-    @SerializedName("uris") val uris: List<String>? = null
-)
-
-data class HydraSource(
-    @SerializedName("downloads") val downloads: List<HydraGame>? = null
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(navController: NavController) {
     var searchQuery by remember { mutableStateOf("") }
     var games by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
@@ -128,7 +121,10 @@ fun HomeScreen() {
                     items(games) { game ->
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
-                            onClick = { /* Add action */ }
+                            onClick = {
+                                val encodedTitle = URLEncoder.encode(game.title ?: "Unknown", "UTF-8")
+                                navController.navigate("game_details/$encodedTitle")
+                            }
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),

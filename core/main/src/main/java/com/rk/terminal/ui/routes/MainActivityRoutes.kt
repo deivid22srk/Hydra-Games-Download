@@ -8,4 +8,5 @@ sealed class MainActivityRoutes(val route: String) {
     data object HydraSources : MainActivityRoutes("hydra_sources")
     data object MainContainer : MainActivityRoutes("main_container")
     data object FolderPicker : MainActivityRoutes("folder_picker")
+    data object GameDetails : MainActivityRoutes("game_details/{title}")
 }

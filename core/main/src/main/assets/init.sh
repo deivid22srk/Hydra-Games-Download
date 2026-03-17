@@ -10,7 +10,7 @@ fi
 
 export PS1="\[\e[38;5;46m\]\u\[\033[39m\]@reterm \[\033[39m\]\w \[\033[0m\]\\$ "
 export PIP_BREAK_SYSTEM_PACKAGES=1
-required_packages="bash gcompat glib nano python3"
+required_packages="bash gcompat glib nano python3 git py3-pip"
 missing_packages=""
 for pkg in $required_packages; do
     if ! apk info -e $pkg >/dev/null 2>&1; then
@@ -26,6 +26,18 @@ if [ -n "$missing_packages" ]; then
         echo -e "\e[32;1m[+] \e[0mSuccessfully Installed\e[0m"
     fi
     echo -e "\e[34m[*] \e[0mUse \e[32mapk\e[0m to install new packages\e[0m"
+fi
+
+if [ ! -d "$HOME/GoFileDownloader" ]; then
+    echo -e "\e[34;1m[*] \e[0mCloning GoFileDownloader\e[0m"
+    cd "$HOME"
+    git clone https://github.com/Lysagxra/GoFileDownloader.git
+fi
+
+if [ -f "$HOME/GoFileDownloader/requirements.txt" ]; then
+    echo -e "\e[34;1m[*] \e[0mInstalling GoFileDownloader requirements\e[0m"
+    cd "$HOME/GoFileDownloader"
+    pip install -r requirements.txt
 fi
 
 if [[ ! -f /linkerconfig/ld.config.txt ]]; then

@@ -132,7 +132,7 @@ fun HydraSourcesScreen() {
                         if (newSourceUrl.isNotBlank()) {
                             val currentSources = Settings.hydraSources.toMutableList()
                             if (currentSources.none { it.url == newSourceUrl }) {
-                                currentSources.add(Settings.HydraSourceConfig(newSourceUrl))
+                                currentSources.add(HydraSourceConfig(newSourceUrl))
                                 Settings.hydraSources = currentSources
                                 sources = currentSources
                             }

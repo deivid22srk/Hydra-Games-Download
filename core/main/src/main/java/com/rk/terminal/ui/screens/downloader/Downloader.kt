@@ -53,13 +53,15 @@ fun Downloader(
     var terminalSession by remember { mutableStateOf<TerminalSession?>(null) }
     var isInstalling by remember { mutableStateOf(false) }
 
-    // 0: Downloading, 1: Extracting, 2: Installing
+    // 0: Downloading, 1: Extracting, 2: Installing Packages, 3: Cloning GoFile, 4: Installing Requirements
     var currentStep by remember { mutableIntStateOf(0) }
 
     val steps = listOf(
         "Baixando arquivos",
         "Extraindo sistema",
-        "Instalando pacotes"
+        "Instalando pacotes base",
+        "Clonando scripts de download",
+        "Instalando dependências Python"
     )
 
     LaunchedEffect(Unit) {
@@ -117,35 +119,35 @@ fun Downloader(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 // Circular Progress
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(120.dp)) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
                     CircularProgressIndicator(
                         progress = { if (currentStep == 0) progress else 1f },
                         modifier = Modifier.fillMaxSize(),
-                        strokeWidth = 8.dp,
+                        strokeWidth = 6.dp,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     )
                     if (currentStep > 0) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            modifier = Modifier.size(64.dp),
+                            modifier = Modifier.size(52.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     } else {
                         Text(
                             text = "${(progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Steps List
                 Column(
-                    modifier = Modifier.fillMaxWidth(0.8f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxWidth(0.9f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     steps.forEachIndexed { index, stepTitle ->
                         StepItem(
@@ -157,11 +159,11 @@ fun Downloader(
                 }
 
                 if (isInstalling) {
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
+                            .height(150.dp)
                     ) {
                         AndroidView(
                             factory = { ctx ->
@@ -174,6 +176,10 @@ fun Downloader(
                                                 currentStep = 1
                                             } else if (text.contains("Installing Important packages")) {
                                                 currentStep = 2
+                                            } else if (text.contains("Cloning GoFileDownloader")) {
+                                                currentStep = 3
+                                            } else if (text.contains("Installing GoFileDownloader requirements")) {
+                                                currentStep = 4
                                             }
                                             onScreenUpdated()
                                         }
@@ -234,14 +240,14 @@ fun StepItem(title: String, isActive: Boolean, isCompleted: Boolean) {
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = color,
             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
         )
         if (isActive && !isCompleted) {
             Spacer(modifier = Modifier.width(8.dp))
             CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(14.dp),
                 strokeWidth = 2.dp,
                 color = color
             )
