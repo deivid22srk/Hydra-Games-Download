@@ -24,7 +24,7 @@ import java.io.FileOutputStream
 
 object MkSession {
     fun createSession(
-        activity: MainActivity, sessionClient: TerminalSessionClient, session_id: String,workingMode:Int
+        activity: MainActivity, sessionClient: TerminalSessionClient, session_id: String,workingMode:Int, initialArgs: List<String>? = null
     ): TerminalSession {
         with(activity) {
             val envVariables = mapOf(
@@ -116,10 +116,14 @@ object MkSession {
                     if (session_id == "install_session") {
                         arrayOf("/system/bin/sh", initFile.absolutePath, "exit")
                     } else {
-                        arrayOf("/system/bin/sh", initFile.absolutePath)
+                        val baseArgs = mutableListOf("/system/bin/sh", initFile.absolutePath)
+                        initialArgs?.let { baseArgs.addAll(it) }
+                        baseArgs.toTypedArray()
                     }
                 }else{
-                    arrayOf("/system/bin/sh")
+                    val baseArgs = mutableListOf("/system/bin/sh")
+                    initialArgs?.let { baseArgs.addAll(it) }
+                    baseArgs.toTypedArray()
                 }
                 "/system/bin/sh"
             } else{
@@ -128,7 +132,7 @@ object MkSession {
             }
 
             pendingCommand = null
-            return TerminalSession(
+            val session = TerminalSession(
                 shell,
                 workingDir,
                 args,
@@ -136,6 +140,10 @@ object MkSession {
                 TerminalEmulator.DEFAULT_TERMINAL_TRANSCRIPT_ROWS,
                 sessionClient,
             )
+            // initialize the session immediately so it starts the process and can receive input
+            // even if not yet attached to a view
+            session.updateSize(80, 24, 0, 0)
+            return session
         }
 
     }

@@ -27,7 +27,7 @@ fun MainContainer(
     navController: NavController,
     sharedGameViewModel: SharedGameViewModel
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

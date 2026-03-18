@@ -192,7 +192,7 @@ fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
-            val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
+            val initialArgs = listOf("sh", "-c", "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"")
 
             val service = activity.sessionBinder?.getService()
             if (service != null) {
@@ -200,16 +200,14 @@ fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
                 var session = activity.sessionBinder?.getSession(sessionId)
 
                 if (session == null) {
-                    // Create a dummy client for the background session
                     val dummyView = com.termux.view.TerminalView(activity, null)
                     val client = TerminalBackEnd(dummyView, activity)
-                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE)
+                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
+                } else {
+                    val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
+                    session.write(cmd)
                 }
 
-                // Inject command
-                session?.write(cmd)
-
-                // Notify user
                 android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
@@ -228,10 +226,7 @@ fun triggerBuzzHeavierDownload(url: String, activity: MainActivity, title: Strin
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
-            // The buzzheavier script doesn't seem to have a --custom-path in its basic usage,
-            // but we can cd to the destination or move the file.
-            // Based on README, it downloads to current dir.
-            val cmd = "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"\n"
+            val initialArgs = listOf("sh", "-c", "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"")
 
             val service = activity.sessionBinder?.getService()
             if (service != null) {
@@ -241,10 +236,11 @@ fun triggerBuzzHeavierDownload(url: String, activity: MainActivity, title: Strin
                 if (session == null) {
                     val dummyView = com.termux.view.TerminalView(activity, null)
                     val client = TerminalBackEnd(dummyView, activity)
-                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE)
+                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
+                } else {
+                    val cmd = "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"\n"
+                    session.write(cmd)
                 }
-
-                session?.write(cmd)
 
                 android.widget.Toast.makeText(activity, "Download iniciado no terminal (BuzzHeavierDownload)", android.widget.Toast.LENGTH_LONG).show()
             }
