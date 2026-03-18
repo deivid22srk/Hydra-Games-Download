@@ -71,7 +71,7 @@ fun DownloadsScreen() {
                 }
             }
         } else {
-            items(activeDownloads) { download ->
+            items(activeDownloads, key = { it.id }) { download ->
                 ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -82,7 +82,7 @@ fun DownloadsScreen() {
                             Icon(
                                 imageVector = when {
                                     download.isCompleted -> Icons.Default.DownloadDone
-                                    download.isPaused -> Icons.Default.Pause
+                                    download.isPaused -> Icons.Default.PlayArrow
                                     else -> Icons.Default.Download
                                 },
                                 contentDescription = null,
@@ -108,6 +108,12 @@ fun DownloadsScreen() {
                                         Icon(Icons.Default.Delete, contentDescription = null)
                                     }
                                 }
+                            } else if (download.isCompleted || download.gid == null) {
+                                IconButton(onClick = {
+                                    activeDownloads.removeIf { it.id == download.id }
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = null)
+                                }
                             }
                         }
 
@@ -129,7 +135,7 @@ fun DownloadsScreen() {
                         ) {
                             Column {
                                 Text(text = download.status, style = MaterialTheme.typography.bodySmall)
-                                if (download.speed.isNotBlank()) {
+                                if (download.speed.isNotBlank() && !download.isPaused) {
                                     Text(text = "Velocidade: ${download.speed}", style = MaterialTheme.typography.bodySmall)
                                 }
                             }
@@ -157,9 +163,10 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
     val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
     val secret = Settings.aria2RpcSecret
 
-    suspend fun callMethod(method: String): List<Map<String, Any>>? {
+    suspend fun callMethod(method: String, extraParams: List<Any> = emptyList()): List<Map<String, Any>>? {
         val params = mutableListOf<Any>()
         if (secret.isNotBlank()) params.add("token:$secret")
+        params.addAll(extraParams)
 
         val requestBody = gson.toJson(mapOf(
             "jsonrpc" to "2.0",
@@ -175,7 +182,10 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
                     if (response.isSuccessful) {
                         val body = response.body?.string()
                         val map = gson.fromJson(body, Map::class.java)
-                        map["result"] as? List<Map<String, Any>>
+                        val result = map["result"]
+                        if (result is List<*>) {
+                            result.filterIsInstance<Map<String, Any>>()
+                        } else null
                     } else null
                 }
             }.getOrNull()
@@ -183,12 +193,15 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
     }
 
     val active = callMethod("aria2.tellActive") ?: emptyList()
-    val waiting = callMethod("aria2.tellWaiting")?.let { it.filterIsInstance<List<Any>>().firstOrNull() as? List<Map<String, Any>> } ?: emptyList() // tellWaiting takes (offset, num)
-    // Simplified: Just update from active for now
+    val waiting = callMethod("aria2.tellWaiting", listOf(0, 100)) ?: emptyList()
+    val stopped = callMethod("aria2.tellStopped", listOf(0, 100)) ?: emptyList()
+
+    val allTasks = active + waiting + stopped
 
     withContext(Dispatchers.Main) {
-        active.forEach { res ->
+        allTasks.forEach { res ->
             val gid = res["gid"] as? String ?: return@forEach
+            val statusAttr = res["status"] as? String ?: ""
             val completedLen = (res["completedLength"] as? String)?.toLongOrNull() ?: 0L
             val totalLen = (res["totalLength"] as? String)?.toLongOrNull() ?: 0L
             val speed = (res["downloadSpeed"] as? String)?.toLongOrNull() ?: 0L
@@ -199,30 +212,42 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
             val speedStr = formatSpeed(speed)
             val sizeStr = formatSize(totalLen)
 
+            val isPaused = statusAttr == "paused" || statusAttr == "waiting"
+            val isCompleted = statusAttr == "complete"
+
             val existingIndex = activeDownloads.indexOfFirst { it.gid == gid || (it.gid == null && it.title.contains("Aria2")) }
             if (existingIndex != -1) {
                 val current = activeDownloads[existingIndex]
                 activeDownloads[existingIndex] = current.copy(
                     gid = gid,
                     progress = progress,
-                    status = "Baixando...",
+                    status = when(statusAttr) {
+                        "active" -> "Baixando..."
+                        "paused" -> "Pausado"
+                        "waiting" -> "Na fila"
+                        "complete" -> "Download concluído"
+                        "error" -> "Erro no download"
+                        else -> statusAttr
+                    },
                     speed = speedStr,
                     totalSize = sizeStr,
-                    isPaused = false
+                    isPaused = isPaused,
+                    isCompleted = isCompleted
                 )
-            } else {
-                activeDownloads.add(DownloadProgress(gid, gid, fileName, progress, "Baixando...", speedStr, sizeStr))
+            } else if (!isCompleted) {
+                activeDownloads.add(DownloadProgress(gid, gid, fileName, progress, "Baixando...", speedStr, sizeStr, isPaused = isPaused))
             }
         }
     }
 }
 
 private fun formatSpeed(speedBytes: Long): String {
+    if (speedBytes <= 0) return ""
     if (speedBytes < 1024) return "$speedBytes B/s"
     val kb = speedBytes / 1024
     if (kb < 1024) return "$kb KB/s"
-    val mb = kb / 1024
-    return "$mb MB/s"
+    val mb = kb.toFloat() / 1024
+    return "%.1f MB/s".format(mb)
 }
 
 private fun formatSize(bytes: Long): String {
@@ -265,7 +290,6 @@ private fun callAria2Method(method: String, params: List<Any>) {
 
     val request = Request.Builder().url(rpcUrl).post(requestBody).build()
 
-    // Fire and forget for now
     client.newCall(request).enqueue(object : okhttp3.Callback {
         override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
         override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) { response.close() }

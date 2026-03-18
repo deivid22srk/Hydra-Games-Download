@@ -56,9 +56,10 @@ class MainActivity : ComponentActivity() {
             sessionBinder = binder
             isBound = true
 
-            // Start Aria2 if not running
+            // Start Aria2 if not running. Use a persistent check to avoid multi-spawn.
             lifecycleScope.launch(Dispatchers.Main) {
-                if (sessionBinder?.getSession("aria2_daemon") == null) {
+                val service = sessionBinder?.getService()
+                if (service != null && !service.sessionList.containsKey("aria2_daemon")) {
                     val dummyView = com.termux.view.TerminalView(this@MainActivity, null)
                     val client = TerminalBackEnd(dummyView, this@MainActivity)
                     sessionBinder?.createSession(

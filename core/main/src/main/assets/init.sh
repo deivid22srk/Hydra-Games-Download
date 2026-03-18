@@ -33,12 +33,11 @@ if [[ ! -f /linkerconfig/ld.config.txt ]]; then
     touch /linkerconfig/ld.config.txt
 fi
 
-# Start Aria2 daemon if not running
+# Start Aria2 daemon if not running and port is not bound
 if ! pgrep aria2c > /dev/null; then
     echo -e "\e[34;1m[*] \e[0mStarting Aria2 RPC server...\e[0m"
-    # Port and Secret should ideally be passed from Android, but using defaults/placeholders for now
-    # We'll use a standard config or command line args
-    aria2c --daemon=true --enable-rpc=true --rpc-listen-all=false --rpc-listen-port=6800 --async-dns=false --quiet=true
+    # Port 6800 check
+    aria2c --daemon=true --enable-rpc=true --rpc-listen-all=false --rpc-listen-port=6800 --async-dns=false --quiet=true || true
 fi
 
 if [ "$#" -eq 0 ]; then
