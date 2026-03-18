@@ -9,7 +9,8 @@ data class HydraSourceConfig(
 
 data class HydraGame(
     @SerializedName("title") val title: String? = null,
-    @SerializedName("uris") val uris: List<String>? = null
+    @SerializedName("uris") val uris: List<String>? = null,
+    var sourceName: String? = null
 )
 
 data class HydraSource(
