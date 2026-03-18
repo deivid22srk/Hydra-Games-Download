@@ -10,8 +10,8 @@ if [ ! -s /etc/resolv.conf ]; then
 fi
 
 export PS1="\[\e[38;5;46m\]\u\[\033[39m\]@reterm \[\033[39m\]\w \[\033[0m\]\\$ "
-export PIP_BREAK_SYSTEM_PACKAGES=1
-required_packages="bash gcompat glib nano python3 git py3-pip aria2 ca-certificates"
+
+required_packages="bash gcompat glib aria2 ca-certificates"
 missing_packages=""
 for pkg in $required_packages; do
     if ! apk info -e $pkg >/dev/null 2>&1; then
@@ -26,27 +26,19 @@ if [ -n "$missing_packages" ]; then
     if [ $? -eq 0 ]; then
         echo -e "\e[32;1m[+] \e[0mSuccessfully Installed\e[0m"
     fi
-    echo -e "\e[34m[*] \e[0mUse \e[32mapk\e[0m to install new packages\e[0m"
 fi
-
-if [ ! -d "$HOME/GoFileDownloader" ]; then
-    echo -e "\e[34;1m[*] \e[0mCloning GoFileDownloader\e[0m"
-    cd "$HOME"
-    git clone https://github.com/Lysagxra/GoFileDownloader.git
-fi
-
-if [ ! -d "$HOME/buzzheavier-downloader" ]; then
-    echo -e "\e[34;1m[*] \e[0mCloning buzzheavier-downloader\e[0m"
-    cd "$HOME"
-    git clone https://github.com/deivid22srk/buzzheavier-downloader.git
-fi
-
-echo -e "\e[34;1m[*] \e[0mInstalling Python dependencies\e[0m"
-pip install requests rich beautifulsoup4 tqdm
 
 if [[ ! -f /linkerconfig/ld.config.txt ]]; then
     mkdir -p /linkerconfig
     touch /linkerconfig/ld.config.txt
+fi
+
+# Start Aria2 daemon if not running
+if ! pgrep aria2c > /dev/null; then
+    echo -e "\e[34;1m[*] \e[0mStarting Aria2 RPC server...\e[0m"
+    # Port and Secret should ideally be passed from Android, but using defaults/placeholders for now
+    # We'll use a standard config or command line args
+    aria2c --daemon=true --enable-rpc=true --rpc-listen-all=false --rpc-listen-port=6800 --async-dns=false --quiet=true
 fi
 
 if [ "$#" -eq 0 ]; then

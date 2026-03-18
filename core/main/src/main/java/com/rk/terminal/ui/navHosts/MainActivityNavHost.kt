@@ -27,6 +27,7 @@ import com.rk.terminal.ui.screens.home.GameDetailsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
 import com.rk.terminal.ui.screens.home.HydraSourcesScreen
 import com.rk.terminal.ui.screens.home.BrowserScreen
+import com.rk.terminal.ui.screens.downloader.SetupExtraScreen
 import com.rk.terminal.ui.screens.home.SharedGameViewModel
 import com.rk.terminal.ui.screens.settings.Aria2Settings
 import com.rk.terminal.ui.screens.settings.FolderPickerScreen
@@ -127,6 +128,10 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
             val url = backStackEntry.arguments?.getString("url") ?: ""
             UpdateStatusBar(mainActivity, show = true)
             BrowserScreen(url = url, mainActivity = mainActivity, navController = navController)
+        }
+        composable(MainActivityRoutes.SetupExtra.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            SetupExtraScreen(navController = navController)
         }
         composable(MainActivityRoutes.GameDetails.route) {
             UpdateStatusBar(mainActivity, show = true)

@@ -137,6 +137,10 @@ object Settings {
         get() = Preference.getString(key = "aria2_user_agent", default = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         set(value) = Preference.setString(key = "aria2_user_agent", value = value)
 
+    var isExtraSetupComplete: Boolean
+        get() = Preference.getBoolean(key = "is_extra_setup_complete", default = false)
+        set(value) = Preference.setBoolean(key = "is_extra_setup_complete", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

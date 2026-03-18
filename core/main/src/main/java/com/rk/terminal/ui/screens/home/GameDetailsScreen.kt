@@ -162,14 +162,8 @@ fun GameDetailsScreen(
                                 )
                             }
                             IconButton(onClick = {
-                                if (uri.contains("gofile.io")) {
-                                    triggerGoFileDownload(uri, mainActivity, gameTitle)
-                                } else if (uri.contains("buzzheavier.com") || uri.contains("bzzhr.co")) {
-                                    triggerBuzzHeavierDownload(uri, mainActivity, gameTitle)
-                                } else {
-                                    val encodedUrl = URLEncoder.encode(uri, "UTF-8")
-                                    navController.navigate("browser/$encodedUrl")
-                                }
+                                val encodedUrl = URLEncoder.encode(uri, "UTF-8")
+                                navController.navigate("browser/$encodedUrl")
                             }) {
                                 Icon(Icons.Default.Download, contentDescription = "Download")
                             }
@@ -187,7 +181,7 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
     val downloadPath = Settings.downloadPath
     val downloadId = url.hashCode().toString()
     if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando via Aria2..."))
+        activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
     }
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
@@ -230,11 +224,18 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                 try {
                     client.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
+                            val respBody = response.body?.string()
+                            val respMap = gson.fromJson(respBody, Map::class.java)
+                            val gid = respMap["result"] as? String
+
                             withContext(Dispatchers.Main) {
+                                val index = activeDownloads.indexOfFirst { it.id == downloadId }
+                                if (index != -1) {
+                                    activeDownloads[index] = activeDownloads[index].copy(gid = gid)
+                                }
                                 android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()
                             }
                         } else {
-                            // If RPC fails, try starting aria2c in terminal
                             startAria2InTerminal(url, activity, title, downloadId, downloadPath)
                         }
                     }
@@ -270,79 +271,6 @@ private fun startAria2InTerminal(url: String, activity: MainActivity, title: Str
             }
             activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
             android.widget.Toast.makeText(activity, "Aria2 iniciado no terminal", android.widget.Toast.LENGTH_LONG).show()
-        }
-    }
-}
-
-fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
-    val downloadPath = Settings.downloadPath
-
-    // Add to Downloads UI
-    val downloadId = url.hashCode().toString()
-    if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando do GoFile..."))
-    }
-
-    activity.lifecycleScope.launch(Dispatchers.Main) {
-        try {
-            val initialArgs = listOf("sh", "-c", "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"")
-
-            val service = activity.sessionBinder?.getService()
-            if (service != null) {
-                val sessionId = "GoFileDownload"
-                var session = activity.sessionBinder?.getSession(sessionId)
-
-                if (session == null) {
-                    val dummyView = com.termux.view.TerminalView(activity, null)
-                    val client = TerminalBackEnd(dummyView, activity).apply {
-                        this.sessionId = sessionId
-                    }
-                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
-                } else {
-                    val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
-                    session.write(cmd)
-                }
-
-                android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-}
-
-fun triggerBuzzHeavierDownload(url: String, activity: MainActivity, title: String) {
-    val downloadPath = Settings.downloadPath
-
-    val downloadId = url.hashCode().toString()
-    if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando do BuzzHeavier..."))
-    }
-
-    activity.lifecycleScope.launch(Dispatchers.Main) {
-        try {
-            val initialArgs = listOf("sh", "-c", "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"")
-
-            val service = activity.sessionBinder?.getService()
-            if (service != null) {
-                val sessionId = "BuzzHeavierDownload"
-                var session = activity.sessionBinder?.getSession(sessionId)
-
-                if (session == null) {
-                    val dummyView = com.termux.view.TerminalView(activity, null)
-                    val client = TerminalBackEnd(dummyView, activity).apply {
-                        this.sessionId = sessionId
-                    }
-                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
-                } else {
-                    val cmd = "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"\n"
-                    session.write(cmd)
-                }
-
-                android.widget.Toast.makeText(activity, "Download iniciado no terminal (BuzzHeavierDownload)", android.widget.Toast.LENGTH_LONG).show()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 }

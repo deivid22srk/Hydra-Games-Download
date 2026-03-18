@@ -32,8 +32,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.rk.terminal.service.SessionService
+import com.rk.settings.Settings
 import com.rk.terminal.ui.navHosts.MainActivityNavHost
 import com.rk.terminal.ui.routes.MainActivityRoutes
+import com.rk.terminal.ui.screens.settings.WorkingMode
+import com.rk.terminal.ui.screens.terminal.MkSession
+import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
 import com.rk.terminal.ui.screens.terminal.terminalView
 import com.rk.terminal.ui.theme.KarbonTheme
@@ -51,6 +55,21 @@ class MainActivity : ComponentActivity() {
             val binder = service as SessionService.SessionBinder
             sessionBinder = binder
             isBound = true
+
+            // Start Aria2 if not running
+            lifecycleScope.launch(Dispatchers.IO) {
+                if (sessionBinder?.getSession("aria2_daemon") == null) {
+                    val dummyView = com.termux.view.TerminalView(this@MainActivity, null)
+                    val client = TerminalBackEnd(dummyView, this@MainActivity)
+                    sessionBinder?.createSession(
+                        "aria2_daemon",
+                        client,
+                        this@MainActivity,
+                        WorkingMode.ALPINE,
+                        initialArgs = listOf("sh", "-c", "aria2c --daemon=false --enable-rpc=true --rpc-listen-all=false --rpc-listen-port=${Settings.aria2RpcPort} --async-dns=false")
+                    )
+                }
+            }
 
             lifecycleScope.launch(Dispatchers.Main){
                 setContent {

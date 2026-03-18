@@ -3,8 +3,7 @@ package com.rk.terminal.ui.screens.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,21 +11,46 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rk.components.compose.preferences.base.PreferenceLayoutLazyColumn
+import com.rk.settings.Settings
+import com.rk.terminal.ui.activities.terminal.MainActivity
+import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 data class DownloadProgress(
     val id: String,
+    val gid: String? = null,
     val title: String,
     val progress: Float,
     val status: String,
-    val isCompleted: Boolean = false
+    val speed: String = "",
+    val totalSize: String = "",
+    val isCompleted: Boolean = false,
+    val isPaused: Boolean = false
 )
 
-// Global state for demonstration. In a real app, use a persistent Service or Database.
 val activeDownloads = mutableStateListOf<DownloadProgress>()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen() {
+    val scope = rememberCoroutineScope()
+
+    // Polling Aria2 status
+    LaunchedEffect(Unit) {
+        val client = OkHttpClient()
+        val gson = Gson()
+        while (true) {
+            updateAria2Status(client, gson)
+            delay(2000)
+        }
+    }
+
     PreferenceLayoutLazyColumn(label = "Downloads Ativos", backArrowVisible = false) {
         if (activeDownloads.isEmpty()) {
             item {
@@ -56,7 +80,11 @@ fun DownloadsScreen() {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = if (download.isCompleted) Icons.Default.DownloadDone else Icons.Default.Download,
+                                imageVector = when {
+                                    download.isCompleted -> Icons.Default.DownloadDone
+                                    download.isPaused -> Icons.Default.Pause
+                                    else -> Icons.Default.Download
+                                },
                                 contentDescription = null,
                                 tint = if (download.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                             )
@@ -67,6 +95,20 @@ fun DownloadsScreen() {
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.weight(1f)
                             )
+
+                            if (!download.isCompleted && download.gid != null) {
+                                Row {
+                                    IconButton(onClick = {
+                                        if (download.isPaused) resumeDownload(download.gid)
+                                        else pauseDownload(download.gid)
+                                    }) {
+                                        Icon(if (download.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null)
+                                    }
+                                    IconButton(onClick = { removeDownload(download.gid) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = null)
+                                    }
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -85,13 +127,23 @@ fun DownloadsScreen() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(text = download.status, style = MaterialTheme.typography.bodySmall)
-                            if (!download.isCompleted) {
-                                Text(
-                                    text = "${(download.progress * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Column {
+                                Text(text = download.status, style = MaterialTheme.typography.bodySmall)
+                                if (download.speed.isNotBlank()) {
+                                    Text(text = "Velocidade: ${download.speed}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                if (!download.isCompleted) {
+                                    Text(
+                                        text = "${(download.progress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (download.totalSize.isNotBlank()) {
+                                    Text(text = download.totalSize, style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
@@ -99,4 +151,123 @@ fun DownloadsScreen() {
             }
         }
     }
+}
+
+private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
+    val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
+    val secret = Settings.aria2RpcSecret
+
+    suspend fun callMethod(method: String): List<Map<String, Any>>? {
+        val params = mutableListOf<Any>()
+        if (secret.isNotBlank()) params.add("token:$secret")
+
+        val requestBody = gson.toJson(mapOf(
+            "jsonrpc" to "2.0",
+            "id" to "q",
+            "method" to method,
+            "params" to params
+        )).toRequestBody("application/json".toMediaTypeOrNull())
+
+        val request = Request.Builder().url(rpcUrl).post(requestBody).build()
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        val map = gson.fromJson(body, Map::class.java)
+                        map["result"] as? List<Map<String, Any>>
+                    } else null
+                }
+            }.getOrNull()
+        }
+    }
+
+    val active = callMethod("aria2.tellActive") ?: emptyList()
+    val waiting = callMethod("aria2.tellWaiting")?.let { it.filterIsInstance<List<Any>>().firstOrNull() as? List<Map<String, Any>> } ?: emptyList() // tellWaiting takes (offset, num)
+    // Simplified: Just update from active for now
+
+    withContext(Dispatchers.Main) {
+        active.forEach { res ->
+            val gid = res["gid"] as? String ?: return@forEach
+            val completedLen = (res["completedLength"] as? String)?.toLongOrNull() ?: 0L
+            val totalLen = (res["totalLength"] as? String)?.toLongOrNull() ?: 0L
+            val speed = (res["downloadSpeed"] as? String)?.toLongOrNull() ?: 0L
+            val files = res["files"] as? List<Map<String, Any>>
+            val fileName = files?.firstOrNull()?.let { (it["path"] as? String)?.split("/")?.last() } ?: "Download Aria2"
+
+            val progress = if (totalLen > 0) completedLen.toFloat() / totalLen else 0f
+            val speedStr = formatSpeed(speed)
+            val sizeStr = formatSize(totalLen)
+
+            val existingIndex = activeDownloads.indexOfFirst { it.gid == gid || (it.gid == null && it.title.contains("Aria2")) }
+            if (existingIndex != -1) {
+                val current = activeDownloads[existingIndex]
+                activeDownloads[existingIndex] = current.copy(
+                    gid = gid,
+                    progress = progress,
+                    status = "Baixando...",
+                    speed = speedStr,
+                    totalSize = sizeStr,
+                    isPaused = false
+                )
+            } else {
+                activeDownloads.add(DownloadProgress(gid, gid, fileName, progress, "Baixando...", speedStr, sizeStr))
+            }
+        }
+    }
+}
+
+private fun formatSpeed(speedBytes: Long): String {
+    if (speedBytes < 1024) return "$speedBytes B/s"
+    val kb = speedBytes / 1024
+    if (kb < 1024) return "$kb KB/s"
+    val mb = kb / 1024
+    return "$mb MB/s"
+}
+
+private fun formatSize(bytes: Long): String {
+    if (bytes <= 0) return ""
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024
+    if (kb < 1024) return "$kb KB"
+    val mb = kb.toFloat() / 1024
+    return "%.1f MB".format(mb)
+}
+
+fun pauseDownload(gid: String) {
+    callAria2Method("aria2.pause", listOf(gid))
+}
+
+fun resumeDownload(gid: String) {
+    callAria2Method("aria2.unpause", listOf(gid))
+}
+
+fun removeDownload(gid: String) {
+    callAria2Method("aria2.remove", listOf(gid))
+}
+
+private fun callAria2Method(method: String, params: List<Any>) {
+    val client = OkHttpClient()
+    val gson = Gson()
+    val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
+    val secret = Settings.aria2RpcSecret
+
+    val rpcParams = mutableListOf<Any>()
+    if (secret.isNotBlank()) rpcParams.add("token:$secret")
+    rpcParams.addAll(params)
+
+    val requestBody = gson.toJson(mapOf(
+        "jsonrpc" to "2.0",
+        "id" to "ctrl",
+        "method" to method,
+        "params" to rpcParams
+    )).toRequestBody("application/json".toMediaTypeOrNull())
+
+    val request = Request.Builder().url(rpcUrl).post(requestBody).build()
+
+    // Fire and forget for now
+    client.newCall(request).enqueue(object : okhttp3.Callback {
+        override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
+        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) { response.close() }
+    })
 }
