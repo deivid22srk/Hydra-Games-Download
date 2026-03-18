@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,6 +51,16 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
     var showRedirectDialog by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var redirectResult by remember { mutableStateOf<Message?>(null) }
 
+    val downloadExtensions = remember {
+        listOf(".zip", ".rar", ".exe", ".iso", ".bin", ".apk", ".7z", ".tar", ".gz", ".msi", ".dmg", ".pkg")
+    }
+
+    fun isDownloadUrl(url: String?): Boolean {
+        if (url == null) return false
+        val lowerUrl = url.lowercase()
+        return downloadExtensions.any { lowerUrl.contains(it) } || lowerUrl.contains("download") || lowerUrl.contains("filename=")
+    }
+
     fun createWebView(initialUrl: String?): WebView {
         return WebView(context).apply {
             settings.apply {
@@ -70,8 +81,13 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val newUrl = request?.url?.toString() ?: return false
-                    val currentUrl = view?.url ?: ""
 
+                    if (isDownloadUrl(newUrl)) {
+                        showDownloadDialog = newUrl
+                        return true
+                    }
+
+                    val currentUrl = view?.url ?: ""
                     if (currentUrl.isNotEmpty() && currentUrl != "about:blank") {
                         val newHost = request.url.host
                         val currentHost = try { Uri.parse(currentUrl).host } catch (e: Exception) { null }
@@ -84,12 +100,18 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                     }
                     return false
                 }
+
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    val failingUrl = request?.url?.toString()
+                    if (request?.isForMainFrame == true && failingUrl != null && isDownloadUrl(failingUrl)) {
+                        showDownloadDialog = failingUrl
+                    }
+                }
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
                     redirectResult = resultMsg
                     showRedirectDialog = "O site está tentando abrir uma nova guia/janela. Deseja permitir?" to {
-                        // For popups, we MUST create a WebView that has not navigated yet.
                         val newWv = createWebView(null)
                         val transport = redirectResult?.obj as? WebView.WebViewTransport
                         transport?.webView = newWv
@@ -267,7 +289,15 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                         }
                     },
                     actions = {
-                        val currentWv = tabs.find { it.id == activeTabId }?.webView
+                        val currentTab = tabs.find { it.id == activeTabId }
+                        val currentWv = currentTab?.webView
+
+                        IconButton(onClick = {
+                            currentWv?.url?.let { showDownloadDialog = it }
+                        }) {
+                            Icon(Icons.Default.Download, contentDescription = "Baixar com Aria2")
+                        }
+
                         if (currentWv?.canGoBack() == true) {
                             IconButton(onClick = { currentWv.goBack() }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
