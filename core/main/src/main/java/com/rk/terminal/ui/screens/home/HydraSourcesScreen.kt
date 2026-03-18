@@ -1,8 +1,6 @@
 package com.rk.terminal.ui.screens.home
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -19,12 +17,12 @@ import com.rk.components.compose.preferences.base.PreferenceLayout
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HydraSourcesScreen() {
-    var sources by remember { mutableStateOf(Settings.hydraSources) }
+    val sources = remember { mutableStateListOf<HydraSourceConfig>().apply { addAll(Settings.hydraSources) } }
     var showAddDialog by remember { mutableStateOf(false) }
     var newSourceUrl by remember { mutableStateOf("") }
 
     PreferenceLayout(label = "Fontes Hydra") {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Gerencie suas fontes de dados para busca de jogos.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -33,7 +31,7 @@ fun HydraSourcesScreen() {
             )
 
             if (sources.isEmpty()) {
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             imageVector = Icons.Default.Link,
@@ -46,11 +44,10 @@ fun HydraSourcesScreen() {
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
+                Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(sources) { config ->
+                    sources.forEach { config ->
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -70,19 +67,18 @@ fun HydraSourcesScreen() {
                                 Switch(
                                     checked = config.isEnabled,
                                     onCheckedChange = { isEnabled ->
-                                        val newList = sources.map {
-                                            if (it.url == config.url) it.copy(isEnabled = isEnabled) else it
+                                        val index = sources.indexOfFirst { it.url == config.url }
+                                        if (index != -1) {
+                                            sources[index] = config.copy(isEnabled = isEnabled)
+                                            Settings.hydraSources = sources.toList()
                                         }
-                                        Settings.hydraSources = newList
-                                        sources = newList
                                     },
                                     modifier = Modifier.padding(horizontal = 8.dp)
                                 )
 
                                 IconButton(onClick = {
-                                    val newList = sources.filter { it.url != config.url }
-                                    Settings.hydraSources = newList
-                                    sources = newList
+                                    sources.removeIf { it.url == config.url }
+                                    Settings.hydraSources = sources.toList()
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
@@ -98,7 +94,7 @@ fun HydraSourcesScreen() {
 
             Button(
                 onClick = { showAddDialog = true },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                 shape = MaterialTheme.shapes.medium
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
@@ -130,11 +126,9 @@ fun HydraSourcesScreen() {
                 confirmButton = {
                     Button(onClick = {
                         if (newSourceUrl.isNotBlank()) {
-                            val currentSources = Settings.hydraSources.toMutableList()
-                            if (currentSources.none { it.url == newSourceUrl }) {
-                                currentSources.add(HydraSourceConfig(newSourceUrl))
-                                Settings.hydraSources = currentSources
-                                sources = currentSources
+                            if (sources.none { it.url == newSourceUrl }) {
+                                sources.add(HydraSourceConfig(newSourceUrl))
+                                Settings.hydraSources = sources.toList()
                             }
                             newSourceUrl = ""
                             showAddDialog = false
