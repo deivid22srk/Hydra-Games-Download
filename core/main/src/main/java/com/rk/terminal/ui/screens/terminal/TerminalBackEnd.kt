@@ -14,6 +14,7 @@ import com.rk.libcommons.createFileIfNot
 import com.rk.libcommons.dpToPx
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
+import com.rk.terminal.ui.screens.home.activeDownloads
 import com.rk.terminal.ui.screens.terminal.virtualkeys.SpecialButton
 import com.rk.terminal.ui.screens.terminal.virtualkeys.VirtualKeysView
 import com.termux.terminal.TerminalEmulator
@@ -28,8 +29,37 @@ import java.io.File
 import java.io.FileOutputStream
 
 class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : TerminalViewClient, TerminalSessionClient {
+    var sessionId: String? = null
+
     override fun onTextChanged(changedSession: TerminalSession) {
         terminal.onScreenUpdated()
+        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload") {
+            updateDownloadProgress(changedSession)
+        }
+    }
+
+    private fun updateDownloadProgress(session: TerminalSession) {
+        val text = session.emulator.screen.getSelectedText(0, 0, session.emulator.mColumns, session.emulator.mRows)
+        val lines = text.split("\n")
+        val lastLines = lines.takeLast(5)
+
+        for (line in lastLines.reversed()) {
+            val matchResult = Regex("""(\d+)%""").find(line)
+            if (matchResult != null) {
+                val progressPercent = matchResult.groupValues[1].toFloatOrNull() ?: continue
+                val progressValue = progressPercent / 100f
+                val status = line.trim()
+
+                activity.runOnUiThread {
+                    val index = activeDownloads.indexOfFirst { it.title.contains(if (sessionId == "GoFileDownload") "GoFile" else "BuzzHeavier", ignoreCase = true) }
+                    if (index != -1) {
+                        val current = activeDownloads[index]
+                        activeDownloads[index] = current.copy(progress = progressValue, status = status)
+                    }
+                }
+                break
+            }
+        }
     }
     
     override fun onTitleChanged(changedSession: TerminalSession) {
@@ -37,14 +67,24 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
     }
     
     override fun onSessionFinished(finishedSession: TerminalSession) {
-        val sessionId = activity.sessionBinder?.getService()?.sessionList?.entries?.find {
+        val id = activity.sessionBinder?.getService()?.sessionList?.entries?.find {
             activity.sessionBinder?.getSession(it.key) == finishedSession
-        }?.key
+        }?.key ?: sessionId
 
-        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload") {
+        if (id == "GoFileDownload" || id == "BuzzHeavierDownload") {
             activity.runOnUiThread {
+                val index = activeDownloads.indexOfFirst { it.title.contains(if (id == "GoFileDownload") "GoFile" else "BuzzHeavier", ignoreCase = true) }
+                if (index != -1) {
+                    val current = activeDownloads[index]
+                    val isSuccess = finishedSession.exitStatus == 0
+                    activeDownloads[index] = current.copy(
+                        progress = 1f,
+                        isCompleted = true,
+                        status = if (isSuccess) "Download concluído" else "Download falhou (código ${finishedSession.exitStatus})"
+                    )
+                }
                 val status = if (finishedSession.exitStatus == 0) "concluído com sucesso" else "falhou (código ${finishedSession.exitStatus})"
-                android.widget.Toast.makeText(activity, "Download $sessionId $status", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(activity, "Download $id $status", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

@@ -17,7 +17,6 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
-import com.rk.terminal.ui.screens.terminal.MkSession
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -201,7 +200,9 @@ fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
 
                 if (session == null) {
                     val dummyView = com.termux.view.TerminalView(activity, null)
-                    val client = TerminalBackEnd(dummyView, activity)
+                    val client = TerminalBackEnd(dummyView, activity).apply {
+                        this.sessionId = sessionId
+                    }
                     session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
                 } else {
                     val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
@@ -235,7 +236,9 @@ fun triggerBuzzHeavierDownload(url: String, activity: MainActivity, title: Strin
 
                 if (session == null) {
                     val dummyView = com.termux.view.TerminalView(activity, null)
-                    val client = TerminalBackEnd(dummyView, activity)
+                    val client = TerminalBackEnd(dummyView, activity).apply {
+                        this.sessionId = sessionId
+                    }
                     session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
                 } else {
                     val cmd = "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"\n"
