@@ -34,11 +34,14 @@ if [ ! -d "$HOME/GoFileDownloader" ]; then
     git clone https://github.com/Lysagxra/GoFileDownloader.git
 fi
 
-if [ -f "$HOME/GoFileDownloader/requirements.txt" ]; then
-    echo -e "\e[34;1m[*] \e[0mInstalling GoFileDownloader requirements\e[0m"
-    cd "$HOME/GoFileDownloader"
-    pip install -r requirements.txt
+if [ ! -d "$HOME/buzzheavier-downloader" ]; then
+    echo -e "\e[34;1m[*] \e[0mCloning buzzheavier-downloader\e[0m"
+    cd "$HOME"
+    git clone https://github.com/deivid22srk/buzzheavier-downloader.git
 fi
+
+echo -e "\e[34;1m[*] \e[0mInstalling Python dependencies\e[0m"
+pip install requests rich beautifulsoup4 tqdm
 
 if [[ ! -f /linkerconfig/ld.config.txt ]]; then
     mkdir -p /linkerconfig

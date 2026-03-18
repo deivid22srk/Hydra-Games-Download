@@ -56,13 +56,15 @@ fun Downloader(
     // 0: Downloading, 1: Extracting, 2: Installing Packages, 3: Cloning GoFile, 4: Installing Requirements
     var currentStep by remember { mutableIntStateOf(0) }
 
-    val steps = listOf(
-        "Baixando arquivos",
-        "Extraindo sistema",
-        "Instalando pacotes base",
-        "Clonando scripts de download",
-        "Instalando dependências Python"
-    )
+    val steps = remember {
+        listOf(
+            "Baixando arquivos",
+            "Extraindo sistema",
+            "Instalando pacotes base",
+            "Clonando scripts de download",
+            "Instalando dependências Python"
+        )
+    }
 
     LaunchedEffect(Unit) {
         if (Rootfs.isFullyInstalled()) {
@@ -176,9 +178,9 @@ fun Downloader(
                                                 currentStep = 1
                                             } else if (text.contains("Installing Important packages")) {
                                                 currentStep = 2
-                                            } else if (text.contains("Cloning GoFileDownloader")) {
+                                            } else if (text.contains("Cloning GoFileDownloader") || text.contains("Cloning buzzheavier-downloader")) {
                                                 currentStep = 3
-                                            } else if (text.contains("Installing GoFileDownloader requirements")) {
+                                            } else if (text.contains("Installing Python dependencies")) {
                                                 currentStep = 4
                                             }
                                             onScreenUpdated()

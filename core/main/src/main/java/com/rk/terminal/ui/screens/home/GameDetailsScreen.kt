@@ -162,10 +162,11 @@ fun GameDetailsScreen(
                             }
                             IconButton(onClick = {
                                 if (uri.contains("gofile.io")) {
-                                    triggerGoFileDownload(uri, mainActivity)
-                                    // Switch to terminal would be better here
+                                    triggerGoFileDownload(uri, mainActivity, gameTitle)
+                                } else if (uri.contains("buzzheavier.com") || uri.contains("bzzhr.co")) {
+                                    triggerBuzzHeavierDownload(uri, mainActivity, gameTitle)
                                 } else {
-                                    // Handle direct link
+                                    // Direct link
                                 }
                             }) {
                                 Icon(Icons.Default.Download, contentDescription = "Download")
@@ -180,15 +181,19 @@ fun GameDetailsScreen(
     }
 }
 
-fun triggerGoFileDownload(url: String, activity: MainActivity) {
+fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
     val downloadPath = Settings.downloadPath
+
+    // Add to Downloads UI
+    val downloadId = url.hashCode().toString()
+    if (activeDownloads.none { it.id == downloadId }) {
+        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando do GoFile..."))
+    }
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
-            // Prepare command to run downloader.py directly with the URL and custom path
             val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
 
-            // Find or create a download session
             val service = activity.sessionBinder?.getService()
             if (service != null) {
                 val sessionId = "GoFileDownload"
@@ -206,6 +211,42 @@ fun triggerGoFileDownload(url: String, activity: MainActivity) {
 
                 // Notify user
                 android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
+
+fun triggerBuzzHeavierDownload(url: String, activity: MainActivity, title: String) {
+    val downloadPath = Settings.downloadPath
+
+    val downloadId = url.hashCode().toString()
+    if (activeDownloads.none { it.id == downloadId }) {
+        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando do BuzzHeavier..."))
+    }
+
+    activity.lifecycleScope.launch(Dispatchers.Main) {
+        try {
+            // The buzzheavier script doesn't seem to have a --custom-path in its basic usage,
+            // but we can cd to the destination or move the file.
+            // Based on README, it downloads to current dir.
+            val cmd = "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"\n"
+
+            val service = activity.sessionBinder?.getService()
+            if (service != null) {
+                val sessionId = "BuzzHeavierDownload"
+                var session = activity.sessionBinder?.getSession(sessionId)
+
+                if (session == null) {
+                    val dummyView = com.termux.view.TerminalView(activity, null)
+                    val client = TerminalBackEnd(dummyView, activity)
+                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE)
+                }
+
+                session?.write(cmd)
+
+                android.widget.Toast.makeText(activity, "Download iniciado no terminal (BuzzHeavierDownload)", android.widget.Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
