@@ -30,16 +30,31 @@ import java.net.URLEncoder
 @Composable
 fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     var searchQuery by remember { mutableStateOf("") }
-    var games by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
+    var allGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val uniqueSources = remember(allGames) {
+        listOf("Tudo") + allGames.mapNotNull { it.sourceName }.distinct().sorted()
+    }
+
+    val filteredGames = remember(allGames, selectedTabIndex, uniqueSources) {
+        if (selectedTabIndex == 0 || selectedTabIndex >= uniqueSources.size) {
+            allGames
+        } else {
+            val source = uniqueSources[selectedTabIndex]
+            allGames.filter { it.sourceName == source }
+        }
+    }
 
     val performSearch = {
         if (searchQuery.isNotBlank()) {
             isSearching = true
+            selectedTabIndex = 0
             val sources = Settings.hydraSources.filter { it.isEnabled }
             scope.launch {
-                val allGames = withContext(Dispatchers.IO) {
+                val results = withContext(Dispatchers.IO) {
                     val list = mutableListOf<HydraGame>()
                     val client = OkHttpClient()
                     val gson = Gson()
@@ -52,7 +67,11 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                     val body = response.body?.string()
                                     if (!body.isNullOrBlank()) {
                                         val source = gson.fromJson(body, HydraSource::class.java)
-                                        source?.downloads?.filterNotNull()?.let { list.addAll(it) }
+                                        val sourceName = source?.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
+                                        source?.downloads?.filterNotNull()?.forEach { game ->
+                                            game.sourceName = sourceName
+                                            list.add(game)
+                                        }
                                     }
                                 }
                             }
@@ -63,8 +82,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     list
                 }
 
-                val filtered = allGames.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
-                games = filtered
+                allGames = results.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
                 isSearching = false
             }
         }
@@ -108,6 +126,23 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 )
             }
 
+            if (allGames.isNotEmpty() && !isSearching) {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    edgePadding = 16.dp,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    divider = {}
+                ) {
+                    uniqueSources.forEachIndexed { index, sourceName ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { Text(sourceName) }
+                        )
+                    }
+                }
+            }
+
             if (isSearching) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -118,7 +153,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(games) { game ->
+                    items(filteredGames) { game ->
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
@@ -147,20 +182,29 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
-                                    game.uris?.firstOrNull()?.let {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = it,
+                                            text = game.sourceName ?: "Desconhecida",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.secondary,
-                                            maxLines = 1
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(end = 8.dp)
                                         )
+                                        game.uris?.firstOrNull()?.let {
+                                            Text(
+                                                text = it,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.secondary,
+                                                maxLines = 1,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    if (games.isEmpty() && searchQuery.isNotEmpty()) {
+                    if (allGames.isEmpty() && searchQuery.isNotEmpty()) {
                         item {
                             Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -169,7 +213,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                 }
                             }
                         }
-                    } else if (games.isEmpty() && searchQuery.isEmpty()) {
+                    } else if (allGames.isEmpty() && searchQuery.isEmpty()) {
                         item {
                             Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("Use a barra de pesquisa para buscar jogos.", color = MaterialTheme.colorScheme.onSurfaceVariant)

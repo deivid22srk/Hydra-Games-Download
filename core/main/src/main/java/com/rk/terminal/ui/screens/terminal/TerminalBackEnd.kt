@@ -14,6 +14,7 @@ import com.rk.libcommons.createFileIfNot
 import com.rk.libcommons.dpToPx
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
+import com.rk.terminal.ui.screens.home.activeDownloads
 import com.rk.terminal.ui.screens.terminal.virtualkeys.SpecialButton
 import com.rk.terminal.ui.screens.terminal.virtualkeys.VirtualKeysView
 import com.termux.terminal.TerminalEmulator
@@ -28,8 +29,44 @@ import java.io.File
 import java.io.FileOutputStream
 
 class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : TerminalViewClient, TerminalSessionClient {
+    var sessionId: String? = null
+
     override fun onTextChanged(changedSession: TerminalSession) {
         terminal.onScreenUpdated()
+        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload" || sessionId == "Aria2Download") {
+            updateDownloadProgress(changedSession)
+        }
+    }
+
+    private val progressRegex = Regex("""\[#([a-f0-9]{6,16}).*?(\d+)%""")
+    private val percentRegex = Regex("""(\d+)%""")
+
+    private fun updateDownloadProgress(session: TerminalSession) {
+        val text = session.emulator.screen.getSelectedText(0, 0, session.emulator.mColumns, session.emulator.mRows)
+        val lines = text.split("\n")
+        val lastLines = lines.takeLast(10)
+
+        for (line in lastLines.reversed()) {
+            val matchResult = progressRegex.find(line) ?: percentRegex.find(line)
+            if (matchResult != null) {
+                val progressPercent = matchResult.groupValues.last().toFloatOrNull() ?: continue
+                val progressValue = progressPercent / 100f
+                val gidMatch = if (matchResult.groupValues.size >= 3) matchResult.groupValues[1] else null
+
+                activity.runOnUiThread {
+                    val index = activeDownloads.indexOfFirst {
+                        (gidMatch != null && (it.id.startsWith(gidMatch) || it.gid?.startsWith(gidMatch) == true)) ||
+                        it.title.contains(if (sessionId == "GoFileDownload") "GoFile" else "BuzzHeavier", ignoreCase = true)
+                    }
+
+                    if (index != -1) {
+                        val current = activeDownloads[index]
+                        activeDownloads[index] = current.copy(progress = progressValue, status = line.trim())
+                    }
+                }
+                break
+            }
+        }
     }
     
     override fun onTitleChanged(changedSession: TerminalSession) {
@@ -37,14 +74,27 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
     }
     
     override fun onSessionFinished(finishedSession: TerminalSession) {
-        val sessionId = activity.sessionBinder?.getService()?.sessionList?.entries?.find {
+        val id = activity.sessionBinder?.getService()?.sessionList?.entries?.find {
             activity.sessionBinder?.getSession(it.key) == finishedSession
-        }?.key
+        }?.key ?: sessionId
 
-        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload") {
+        if (id == "GoFileDownload" || id == "BuzzHeavierDownload" || id == "Aria2Download") {
             activity.runOnUiThread {
+                val index = activeDownloads.indexOfFirst {
+                    it.id.contains(id.replace("Aria2Download_", "")) ||
+                    it.title.contains(if (id.contains("GoFile")) "GoFile" else "BuzzHeavier", ignoreCase = true)
+                }
+                if (index != -1) {
+                    val current = activeDownloads[index]
+                    val isSuccess = finishedSession.exitStatus == 0
+                    activeDownloads[index] = current.copy(
+                        progress = 1f,
+                        isCompleted = true,
+                        status = if (isSuccess) "Download concluído" else "Download falhou (código ${finishedSession.exitStatus})"
+                    )
+                }
                 val status = if (finishedSession.exitStatus == 0) "concluído com sucesso" else "falhou (código ${finishedSession.exitStatus})"
-                android.widget.Toast.makeText(activity, "Download $sessionId $status", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(activity, "Download $id $status", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

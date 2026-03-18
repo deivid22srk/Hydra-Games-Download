@@ -17,10 +17,11 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
-import com.rk.terminal.ui.screens.terminal.MkSession
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,6 +32,13 @@ import java.net.URLEncoder
 import androidx.lifecycle.lifecycleScope
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.settings.WorkingMode
+import java.security.MessageDigest
+
+fun generateGid(url: String): String {
+    val md = MessageDigest.getInstance("MD5")
+    val digest = md.digest(url.toByteArray())
+    return digest.joinToString("") { "%02x".format(it) }.take(16)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -161,13 +169,8 @@ fun GameDetailsScreen(
                                 )
                             }
                             IconButton(onClick = {
-                                if (uri.contains("gofile.io")) {
-                                    triggerGoFileDownload(uri, mainActivity, gameTitle)
-                                } else if (uri.contains("buzzheavier.com") || uri.contains("bzzhr.co")) {
-                                    triggerBuzzHeavierDownload(uri, mainActivity, gameTitle)
-                                } else {
-                                    // Direct link
-                                }
+                                val encodedUrl = URLEncoder.encode(uri, "UTF-8")
+                                navController.navigate("browser/$encodedUrl")
                             }) {
                                 Icon(Icons.Default.Download, contentDescription = "Download")
                             }
@@ -181,34 +184,72 @@ fun GameDetailsScreen(
     }
 }
 
-fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
+fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
     val downloadPath = Settings.downloadPath
-
-    // Add to Downloads UI
-    val downloadId = url.hashCode().toString()
+    val downloadId = generateGid(url)
     if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando do GoFile..."))
+        activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
     }
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
-            val initialArgs = listOf("sh", "-c", "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"")
+            val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
+            val rpcSecret = Settings.aria2RpcSecret
+            val maxConn = Settings.aria2MaxConnections
 
-            val service = activity.sessionBinder?.getService()
-            if (service != null) {
-                val sessionId = "GoFileDownload"
-                var session = activity.sessionBinder?.getSession(sessionId)
+            val client = OkHttpClient()
+            val gson = Gson()
 
-                if (session == null) {
-                    val dummyView = com.termux.view.TerminalView(activity, null)
-                    val client = TerminalBackEnd(dummyView, activity)
-                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
-                } else {
-                    val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
-                    session.write(cmd)
+            val params = mutableListOf<Any>()
+            if (rpcSecret.isNotBlank()) {
+                params.add("token:$rpcSecret")
+            }
+            params.add(listOf(url))
+            params.add(mapOf(
+                "dir" to downloadPath,
+                "max-connection-per-server" to maxConn.toString(),
+                "split" to maxConn.toString(),
+                "user-agent" to Settings.aria2UserAgent,
+                "async-dns" to "false",
+                "gid" to downloadId
+            ))
+
+            val rpcRequestMap = mapOf(
+                "jsonrpc" to "2.0",
+                "id" to "add",
+                "method" to "aria2.addUri",
+                "params" to params
+            )
+
+            val requestBody = gson.toJson(rpcRequestMap).toRequestBody("application/json".toMediaTypeOrNull())
+
+            val request = Request.Builder()
+                .url(rpcUrl)
+                .post(requestBody)
+                .build()
+
+            withContext(Dispatchers.IO) {
+                try {
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val respBody = response.body?.string()
+                            val respMap = gson.fromJson(respBody, Map::class.java)
+                            val gid = respMap["result"] as? String
+
+                            withContext(Dispatchers.Main) {
+                                val index = activeDownloads.indexOfFirst { it.id == downloadId }
+                                if (index != -1) {
+                                    activeDownloads[index] = activeDownloads[index].copy(gid = gid)
+                                }
+                                android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                        }
+                    }
+                } catch (e: Exception) {
+                    startAria2InTerminal(url, activity, title, downloadId, downloadPath)
                 }
-
-                android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -216,36 +257,25 @@ fun triggerGoFileDownload(url: String, activity: MainActivity, title: String) {
     }
 }
 
-fun triggerBuzzHeavierDownload(url: String, activity: MainActivity, title: String) {
-    val downloadPath = Settings.downloadPath
-
-    val downloadId = url.hashCode().toString()
-    if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando do BuzzHeavier..."))
-    }
-
+private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String) {
     activity.lifecycleScope.launch(Dispatchers.Main) {
-        try {
-            val initialArgs = listOf("sh", "-c", "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"")
+        val maxConn = Settings.aria2MaxConnections
 
-            val service = activity.sessionBinder?.getService()
-            if (service != null) {
-                val sessionId = "BuzzHeavierDownload"
-                var session = activity.sessionBinder?.getSession(sessionId)
+        // Run as standalone download in terminal to avoid port conflicts with daemon
+        val aria2Cmd = "aria2c --dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
+                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --gid=$downloadId \"$url\""
 
-                if (session == null) {
-                    val dummyView = com.termux.view.TerminalView(activity, null)
-                    val client = TerminalBackEnd(dummyView, activity)
-                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
-                } else {
-                    val cmd = "mkdir -p \"$downloadPath\" && cd \"$downloadPath\" && python3 ~/buzzheavier-downloader/bhdownload.py \"$url\"\n"
-                    session.write(cmd)
-                }
+        val initialArgs = listOf("sh", "-c", aria2Cmd)
 
-                android.widget.Toast.makeText(activity, "Download iniciado no terminal (BuzzHeavierDownload)", android.widget.Toast.LENGTH_LONG).show()
+        val service = activity.sessionBinder?.getService()
+        if (service != null) {
+            val sessionId = "Aria2Download_$downloadId"
+            val dummyView = com.termux.view.TerminalView(activity, null)
+            val client = TerminalBackEnd(dummyView, activity).apply {
+                this.sessionId = "Aria2Download"
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
+            android.widget.Toast.makeText(activity, "Aria2 iniciado no terminal", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }

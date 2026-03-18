@@ -53,7 +53,7 @@ fun Downloader(
     var terminalSession by remember { mutableStateOf<TerminalSession?>(null) }
     var isInstalling by remember { mutableStateOf(false) }
 
-    // 0: Downloading, 1: Extracting, 2: Installing Packages, 3: Cloning GoFile, 4: Installing Requirements
+    // 0: Downloading, 1: Extracting, 2: Installing Packages, 3: Initializing
     var currentStep by remember { mutableIntStateOf(0) }
 
     val steps = remember {
@@ -61,15 +61,20 @@ fun Downloader(
             "Baixando arquivos",
             "Extraindo sistema",
             "Instalando pacotes base",
-            "Clonando scripts de download",
-            "Instalando dependências Python"
+            "Iniciando serviços"
         )
     }
 
     LaunchedEffect(Unit) {
         if (Rootfs.isFullyInstalled()) {
-            navController.navigate(MainActivityRoutes.MainScreen.route) {
-                popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+            if (Settings.isExtraSetupComplete) {
+                navController.navigate(MainActivityRoutes.MainScreen.route) {
+                    popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+                }
+            } else {
+                navController.navigate(MainActivityRoutes.SetupExtra.route) {
+                    popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+                }
             }
             return@LaunchedEffect
         }
@@ -178,10 +183,8 @@ fun Downloader(
                                                 currentStep = 1
                                             } else if (text.contains("Installing Important packages")) {
                                                 currentStep = 2
-                                            } else if (text.contains("Cloning GoFileDownloader") || text.contains("Cloning buzzheavier-downloader")) {
+                                            } else if (text.contains("Successfully Installed") && currentStep == 2) {
                                                 currentStep = 3
-                                            } else if (text.contains("Installing Python dependencies")) {
-                                                currentStep = 4
                                             }
                                             onScreenUpdated()
                                         }
@@ -192,8 +195,14 @@ fun Downloader(
                                                 Rootfs.isFullyInstalled.value = true
                                                 isSetupComplete = true
                                                 mainActivity.runOnUiThread {
-                                                    navController.navigate(MainActivityRoutes.MainScreen.route) {
-                                                        popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+                                                    if (Settings.isExtraSetupComplete) {
+                                                        navController.navigate(MainActivityRoutes.MainScreen.route) {
+                                                            popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+                                                        }
+                                                    } else {
+                                                        navController.navigate(MainActivityRoutes.SetupExtra.route) {
+                                                            popUpTo(MainActivityRoutes.MainScreen.route) { inclusive = true }
+                                                        }
                                                     }
                                                 }
                                             } else {

@@ -118,8 +118,28 @@ object Settings {
         set(value) = Preference.setString(key = "download_path", value = value)
 
     var steamGridDbApiKey: String
-        get() = Preference.getString(key = "sgdb_api_key", default = "")
+        get() = Preference.getString(key = "sgdb_api_key", default = "908de574ad3e4939f500725fd24e47b9")
         set(value) = Preference.setString(key = "sgdb_api_key", value = value)
+
+    var aria2RpcSecret: String
+        get() = Preference.getString(key = "aria2_rpc_secret", default = "")
+        set(value) = Preference.setString(key = "aria2_rpc_secret", value = value)
+
+    var aria2RpcPort: Int
+        get() = Preference.getInt(key = "aria2_rpc_port", default = 6800)
+        set(value) = Preference.setInt(key = "aria2_rpc_port", value = value)
+
+    var aria2MaxConnections: Int
+        get() = Preference.getInt(key = "aria2_max_connections", default = 5)
+        set(value) = Preference.setInt(key = "aria2_max_connections", value = value)
+
+    var aria2UserAgent: String
+        get() = Preference.getString(key = "aria2_user_agent", default = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        set(value) = Preference.setString(key = "aria2_user_agent", value = value)
+
+    var isExtraSetupComplete: Boolean
+        get() = Preference.getBoolean(key = "is_extra_setup_complete", default = false)
+        set(value) = Preference.setBoolean(key = "is_extra_setup_complete", value = value)
 
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
