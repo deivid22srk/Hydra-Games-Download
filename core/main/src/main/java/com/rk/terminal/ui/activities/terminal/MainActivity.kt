@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
             isBound = true
 
             // Start Aria2 if not running
-            lifecycleScope.launch(Dispatchers.IO) {
+            lifecycleScope.launch(Dispatchers.Main) {
                 if (sessionBinder?.getSession("aria2_daemon") == null) {
                     val dummyView = com.termux.view.TerminalView(this@MainActivity, null)
                     val client = TerminalBackEnd(dummyView, this@MainActivity)

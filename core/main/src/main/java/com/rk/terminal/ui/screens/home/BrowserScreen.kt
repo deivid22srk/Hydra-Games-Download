@@ -1,5 +1,6 @@
 package com.rk.terminal.ui.screens.home
 
+import android.net.Uri
 import android.os.Message
 import android.webkit.*
 import androidx.compose.foundation.clickable
@@ -46,7 +47,7 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
     var activeTabId by remember { mutableStateOf<String?>(null) }
 
     var showDownloadDialog by remember { mutableStateOf<String?>(null) }
-    var showRedirectDialog by remember { mutableStateOf<Pair<String, WebSettings.() -> Unit>?>(null) }
+    var showRedirectDialog by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var redirectResult by remember { mutableStateOf<Message?>(null) }
 
     fun createWebView(initialUrl: String): WebView {
@@ -59,6 +60,7 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                 setSupportMultipleWindows(true)
                 javaScriptCanOpenWindowsAutomatically = true
                 cacheMode = WebSettings.LOAD_DEFAULT
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             }
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -68,18 +70,34 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val newUrl = request?.url?.toString() ?: return false
-                    // If it's a redirect to a different host, maybe ask?
-                    // But for now, let's just allow normal navigation and only intercept new windows.
+                    val currentUrl = view?.url ?: ""
+
+                    if (currentUrl.isNotEmpty() && currentUrl != "about:blank") {
+                        val newHost = request.url.host
+                        val currentHost = Uri.parse(currentUrl).host
+                        if (newHost != null && newHost != currentHost) {
+                            showRedirectDialog = "O site está tentando redirecionar para um domínio diferente: $newHost. Deseja prosseguir?" to {
+                                view?.loadUrl(newUrl)
+                            }
+                            return true
+                        }
+                    }
                     return false
                 }
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
-                    val transport = resultMsg?.obj as? WebView.WebViewTransport
                     redirectResult = resultMsg
-                    // We can't easily get the URL here before the window is created,
-                    // but we can ask the user if they want to open a new tab.
-                    showRedirectDialog = "O site está tentando abrir uma nova janela." to {}
+                    showRedirectDialog = "O site está tentando abrir uma nova guia/janela. Deseja permitir?" to {
+                        val newWv = createWebView("about:blank")
+                        val transport = redirectResult?.obj as? WebView.WebViewTransport
+                        transport?.webView = newWv
+                        redirectResult?.sendToTarget()
+
+                        val newTab = BrowserTab(webView = newWv)
+                        tabs.add(newTab)
+                        activeTabId = newTab.id
+                    }
                     return true
                 }
             }
@@ -125,24 +143,16 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
     if (showRedirectDialog != null) {
         AlertDialog(
             onDismissRequest = {
-                redirectResult?.sendToTarget() // Just in case, but we probably shouldn't if canceled
                 showRedirectDialog = null
             },
-            title = { Text("Nova Guia") },
+            title = { Text("Aviso do Navegador") },
             text = { Text(showRedirectDialog!!.first) },
             confirmButton = {
                 Button(onClick = {
-                    val newWv = createWebView("about:blank")
-                    val transport = redirectResult?.obj as? WebView.WebViewTransport
-                    transport?.webView = newWv
-                    redirectResult?.sendToTarget()
-
-                    val newTab = BrowserTab(webView = newWv)
-                    tabs.add(newTab)
-                    activeTabId = newTab.id
+                    showRedirectDialog!!.second.invoke()
                     showRedirectDialog = null
                 }) {
-                    Text("Abrir")
+                    Text("Sim/Abrir")
                 }
             },
             dismissButton = {
@@ -150,7 +160,7 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                     redirectResult = null
                     showRedirectDialog = null
                 }) {
-                    Text("Recusar")
+                    Text("Não/Recusar")
                 }
             }
         )
