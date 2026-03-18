@@ -183,41 +183,29 @@ fun GameDetailsScreen(
 fun triggerGoFileDownload(url: String, activity: MainActivity) {
     val downloadPath = Settings.downloadPath
 
-    activity.lifecycleScope.launch(Dispatchers.IO) {
+    activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
-            // 1. Write URL to URLs.txt
-            val rootfsDir = java.io.File(activity.filesDir, "local/alpine")
-            val downloaderDir = java.io.File(rootfsDir, "root/GoFileDownloader")
-            if (!downloaderDir.exists()) downloaderDir.mkdirs()
+            // Prepare command to run downloader.py directly with the URL and custom path
+            val cmd = "cd ~/GoFileDownloader && python3 downloader.py \"$url\" --custom-path \"$downloadPath\"\n"
 
-            val urlsFile = java.io.File(downloaderDir, "URLs.txt")
-            urlsFile.writeText(url + "\n")
+            // Find or create a download session
+            val service = activity.sessionBinder?.getService()
+            if (service != null) {
+                val sessionId = "GoFileDownload"
+                var session = activity.sessionBinder?.getSession(sessionId)
 
-            // 2. Prepare command
-            val cmd = "cd ~/GoFileDownloader && python3 main.py --custom-path \"$downloadPath\"\n"
-
-            withContext(Dispatchers.Main) {
-                // 3. Find or create a download session
-                val service = activity.sessionBinder?.getService()
-                if (service != null) {
-                    val sessionId = "GoFileDownload"
-                    var session = activity.sessionBinder?.getSession(sessionId)
-
-                    if (session == null) {
-                        // Create a dummy client for the background session
-                        val dummyView = com.termux.view.TerminalView(activity, null)
-                        val client = TerminalBackEnd(dummyView, activity)
-                        session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE)
-                    }
-
-                    // 4. Inject command
-                    session?.write(cmd)
-
-                    // 5. Notify user
-                    activity.runOnUiThread {
-                        android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
-                    }
+                if (session == null) {
+                    // Create a dummy client for the background session
+                    val dummyView = com.termux.view.TerminalView(activity, null)
+                    val client = TerminalBackEnd(dummyView, activity)
+                    session = activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE)
                 }
+
+                // Inject command
+                session?.write(cmd)
+
+                // Notify user
+                android.widget.Toast.makeText(activity, "Download iniciado no terminal (GoFileDownload)", android.widget.Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
