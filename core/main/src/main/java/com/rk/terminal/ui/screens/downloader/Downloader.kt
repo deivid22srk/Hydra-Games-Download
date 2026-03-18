@@ -53,7 +53,7 @@ fun Downloader(
     var terminalSession by remember { mutableStateOf<TerminalSession?>(null) }
     var isInstalling by remember { mutableStateOf(false) }
 
-    // 0: Downloading, 1: Extracting, 2: Installing Packages, 3: Cloning GoFile, 4: Installing Requirements
+    // 0: Downloading, 1: Extracting, 2: Installing Packages, 3: Installing Aria2, 4: Cloning Scripts, 5: Python Deps
     var currentStep by remember { mutableIntStateOf(0) }
 
     val steps = remember {
@@ -61,6 +61,7 @@ fun Downloader(
             "Baixando arquivos",
             "Extraindo sistema",
             "Instalando pacotes base",
+            "Instalando Aria2",
             "Clonando scripts de download",
             "Instalando dependências Python"
         )
@@ -178,10 +179,12 @@ fun Downloader(
                                                 currentStep = 1
                                             } else if (text.contains("Installing Important packages")) {
                                                 currentStep = 2
-                                            } else if (text.contains("Cloning GoFileDownloader") || text.contains("Cloning buzzheavier-downloader")) {
+                                            } else if (text.contains("Successfully Installed") && currentStep == 2) {
                                                 currentStep = 3
-                                            } else if (text.contains("Installing Python dependencies")) {
+                                            } else if (text.contains("Cloning GoFileDownloader") || text.contains("Cloning buzzheavier-downloader")) {
                                                 currentStep = 4
+                                            } else if (text.contains("Installing Python dependencies")) {
+                                                currentStep = 5
                                             }
                                             onScreenUpdated()
                                         }

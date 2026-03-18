@@ -121,6 +121,18 @@ object Settings {
         get() = Preference.getString(key = "sgdb_api_key", default = "")
         set(value) = Preference.setString(key = "sgdb_api_key", value = value)
 
+    var aria2RpcSecret: String
+        get() = Preference.getString(key = "aria2_rpc_secret", default = "")
+        set(value) = Preference.setString(key = "aria2_rpc_secret", value = value)
+
+    var aria2RpcPort: Int
+        get() = Preference.getInt(key = "aria2_rpc_port", default = 6800)
+        set(value) = Preference.setInt(key = "aria2_rpc_port", value = value)
+
+    var aria2MaxConnections: Int
+        get() = Preference.getInt(key = "aria2_max_connections", default = 5)
+        set(value) = Preference.setInt(key = "aria2_max_connections", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

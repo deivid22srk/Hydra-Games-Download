@@ -145,6 +145,16 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
                     navController.navigate(MainActivityRoutes.FolderPicker.route)
                 }
             )
+            SettingsCard(
+                title = { Text("Configurações Aria2") },
+                description = { Text("Configurar RPC, conexões e mais") },
+                endWidget = {
+                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
+                },
+                onClick = {
+                    navController.navigate(MainActivityRoutes.Aria2Settings.route)
+                }
+            )
         }
 
         PreferenceGroup(heading = stringResource(strings.input_mode)) {

@@ -20,6 +20,8 @@ import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -165,7 +167,8 @@ fun GameDetailsScreen(
                                 } else if (uri.contains("buzzheavier.com") || uri.contains("bzzhr.co")) {
                                     triggerBuzzHeavierDownload(uri, mainActivity, gameTitle)
                                 } else {
-                                    // Direct link
+                                    val encodedUrl = URLEncoder.encode(uri, "UTF-8")
+                                    navController.navigate("browser/$encodedUrl")
                                 }
                             }) {
                                 Icon(Icons.Default.Download, contentDescription = "Download")
@@ -176,6 +179,94 @@ fun GameDetailsScreen(
             } else {
                 Text("Nenhum link de download disponível para este jogo.")
             }
+        }
+    }
+}
+
+fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
+    val downloadPath = Settings.downloadPath
+    val downloadId = url.hashCode().toString()
+    if (activeDownloads.none { it.id == downloadId }) {
+        activeDownloads.add(DownloadProgress(downloadId, title, 0.1f, "Baixando via Aria2..."))
+    }
+
+    activity.lifecycleScope.launch(Dispatchers.Main) {
+        try {
+            val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
+            val rpcSecret = Settings.aria2RpcSecret
+            val maxConn = Settings.aria2MaxConnections
+
+            val client = OkHttpClient()
+            val gson = Gson()
+
+            val params = mutableListOf<Any>()
+            if (rpcSecret.isNotBlank()) {
+                params.add("token:$rpcSecret")
+            }
+            params.add(listOf(url))
+            params.add(mapOf(
+                "dir" to downloadPath,
+                "max-connection-per-server" to maxConn.toString(),
+                "split" to maxConn.toString()
+            ))
+
+            val rpcRequestMap = mapOf(
+                "jsonrpc" to "2.0",
+                "id" to downloadId,
+                "method" to "aria2.addUri",
+                "params" to params
+            )
+
+            val requestBody = gson.toJson(rpcRequestMap).toRequestBody("application/json".toMediaTypeOrNull())
+
+            val request = Request.Builder()
+                .url(rpcUrl)
+                .post(requestBody)
+                .build()
+
+            withContext(Dispatchers.IO) {
+                try {
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            // If RPC fails, try starting aria2c in terminal
+                            startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                        }
+                    }
+                } catch (e: Exception) {
+                    startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
+
+private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String) {
+    activity.lifecycleScope.launch(Dispatchers.Main) {
+        val rpcSecret = Settings.aria2RpcSecret
+        val rpcPort = Settings.aria2RpcPort
+        val maxConn = Settings.aria2MaxConnections
+
+        val aria2Cmd = "aria2c --enable-rpc --rpc-listen-all=false --rpc-listen-port=$rpcPort " +
+                (if (rpcSecret.isNotBlank()) "--rpc-secret=\"$rpcSecret\" " else "") +
+                "--dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn \"$url\""
+
+        val initialArgs = listOf("sh", "-c", aria2Cmd)
+
+        val service = activity.sessionBinder?.getService()
+        if (service != null) {
+            val sessionId = "Aria2Download_$downloadId"
+            val dummyView = com.termux.view.TerminalView(activity, null)
+            val client = TerminalBackEnd(dummyView, activity).apply {
+                this.sessionId = "Aria2Download"
+            }
+            activity.sessionBinder?.createSession(sessionId, client, activity, WorkingMode.ALPINE, initialArgs = initialArgs)
+            android.widget.Toast.makeText(activity, "Aria2 iniciado no terminal", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }

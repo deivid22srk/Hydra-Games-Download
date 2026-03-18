@@ -33,10 +33,12 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
 
     override fun onTextChanged(changedSession: TerminalSession) {
         terminal.onScreenUpdated()
-        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload") {
+        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload" || sessionId == "Aria2Download") {
             updateDownloadProgress(changedSession)
         }
     }
+
+    private val progressRegex = Regex("""(\d+)%""")
 
     private fun updateDownloadProgress(session: TerminalSession) {
         val text = session.emulator.screen.getSelectedText(0, 0, session.emulator.mColumns, session.emulator.mRows)
@@ -44,14 +46,20 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
         val lastLines = lines.takeLast(5)
 
         for (line in lastLines.reversed()) {
-            val matchResult = Regex("""(\d+)%""").find(line)
+            val matchResult = progressRegex.find(line)
             if (matchResult != null) {
                 val progressPercent = matchResult.groupValues[1].toFloatOrNull() ?: continue
                 val progressValue = progressPercent / 100f
                 val status = line.trim()
 
                 activity.runOnUiThread {
-                    val index = activeDownloads.indexOfFirst { it.title.contains(if (sessionId == "GoFileDownload") "GoFile" else "BuzzHeavier", ignoreCase = true) }
+                    val searchString = when(sessionId) {
+                        "GoFileDownload" -> "GoFile"
+                        "BuzzHeavierDownload" -> "BuzzHeavier"
+                        "Aria2Download" -> "Aria2"
+                        else -> ""
+                    }
+                    val index = activeDownloads.indexOfFirst { it.title.contains(searchString, ignoreCase = true) || it.status.contains("Aria2") }
                     if (index != -1) {
                         val current = activeDownloads[index]
                         activeDownloads[index] = current.copy(progress = progressValue, status = status)
@@ -71,9 +79,15 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
             activity.sessionBinder?.getSession(it.key) == finishedSession
         }?.key ?: sessionId
 
-        if (id == "GoFileDownload" || id == "BuzzHeavierDownload") {
+        if (id == "GoFileDownload" || id == "BuzzHeavierDownload" || id == "Aria2Download") {
             activity.runOnUiThread {
-                val index = activeDownloads.indexOfFirst { it.title.contains(if (id == "GoFileDownload") "GoFile" else "BuzzHeavier", ignoreCase = true) }
+                val searchString = when(id) {
+                    "GoFileDownload" -> "GoFile"
+                    "BuzzHeavierDownload" -> "BuzzHeavier"
+                    "Aria2Download" -> "Aria2"
+                    else -> ""
+                }
+                val index = activeDownloads.indexOfFirst { it.title.contains(searchString, ignoreCase = true) || it.status.contains("Aria2") }
                 if (index != -1) {
                     val current = activeDownloads[index]
                     val isSuccess = finishedSession.exitStatus == 0

@@ -26,7 +26,9 @@ import com.rk.terminal.ui.screens.downloader.Downloader
 import com.rk.terminal.ui.screens.home.GameDetailsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
 import com.rk.terminal.ui.screens.home.HydraSourcesScreen
+import com.rk.terminal.ui.screens.home.BrowserScreen
 import com.rk.terminal.ui.screens.home.SharedGameViewModel
+import com.rk.terminal.ui.screens.settings.Aria2Settings
 import com.rk.terminal.ui.screens.settings.FolderPickerScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.Rootfs
@@ -116,6 +118,15 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         composable(MainActivityRoutes.FolderPicker.route) {
             UpdateStatusBar(mainActivity, show = true)
             FolderPickerScreen(navController = navController)
+        }
+        composable(MainActivityRoutes.Aria2Settings.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            Aria2Settings(navController = navController)
+        }
+        composable(MainActivityRoutes.Browser.route) { backStackEntry ->
+            val url = backStackEntry.arguments?.getString("url") ?: ""
+            UpdateStatusBar(mainActivity, show = true)
+            BrowserScreen(url = url, mainActivity = mainActivity, navController = navController)
         }
         composable(MainActivityRoutes.GameDetails.route) {
             UpdateStatusBar(mainActivity, show = true)
