@@ -223,6 +223,7 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
         val rpcGids = allTasks.mapNotNull { it["gid"] as? String }.toSet()
 
         // Remove items from activeDownloads that are no longer in Aria2 and not completed
+        // This ensures items cleared from Aria2 (but not completed) disappear from UI
         activeDownloads.removeIf { it.gid != null && it.gid !in rpcGids && !it.isCompleted }
 
         allTasks.forEach { res ->
@@ -269,8 +270,21 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
                     isPaused = isPaused,
                     isCompleted = isCompleted
                 )
-            } else if (!isCompleted) {
-                activeDownloads.add(DownloadProgress(gid, gid, fileName, progress, "Adicionado", speedStr, sizeStr, isPaused = isPaused))
+            } else {
+                // Persistent: items found in Aria2 but not in our list (e.g. after restart)
+                activeDownloads.add(
+                    DownloadProgress(
+                        id = gid,
+                        gid = gid,
+                        title = fileName,
+                        progress = progress,
+                        status = if (isPaused) "Pausado" else if (isCompleted) "Concluído" else "Adicionado",
+                        speed = speedStr,
+                        totalSize = sizeStr,
+                        isPaused = isPaused,
+                        isCompleted = isCompleted
+                    )
+                )
             }
         }
     }

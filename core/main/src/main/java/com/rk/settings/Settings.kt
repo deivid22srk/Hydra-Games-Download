@@ -118,7 +118,7 @@ object Settings {
         set(value) = Preference.setString(key = "download_path", value = value)
 
     var steamGridDbApiKey: String
-        get() = Preference.getString(key = "sgdb_api_key", default = "")
+        get() = Preference.getString(key = "sgdb_api_key", default = "908de574ad3e4939f500725fd24e47b9")
         set(value) = Preference.setString(key = "sgdb_api_key", value = value)
 
     var aria2RpcSecret: String
