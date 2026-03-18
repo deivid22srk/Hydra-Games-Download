@@ -231,10 +231,15 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
             val completedLen = (res["completedLength"] as? String)?.toLongOrNull() ?: 0L
             val totalLen = (res["totalLength"] as? String)?.toLongOrNull() ?: 0L
             val speed = (res["downloadSpeed"] as? String)?.toLongOrNull() ?: 0L
+
             val files = res["files"] as? List<Map<String, Any>>
-            val fileName = files?.firstOrNull()?.let {
+            val fileInfo = files?.firstOrNull()
+            val fileName = fileInfo?.let {
                 val path = it["path"] as? String
-                if (path.isNullOrEmpty()) "Download Aria2" else path.split("/").last()
+                if (path.isNullOrEmpty()) {
+                    val uris = it["uris"] as? List<Map<String, Any>>
+                    uris?.firstOrNull()?.let { (it["uri"] as? String)?.split("/")?.last()?.split("?")?.first() }
+                } else path.split("/").last()
             } ?: "Download Aria2"
 
             val progress = if (totalLen > 0) completedLen.toFloat() / totalLen else 0f
@@ -249,6 +254,7 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
                 val current = activeDownloads[existingIndex]
                 activeDownloads[existingIndex] = current.copy(
                     gid = gid,
+                    title = if (current.title == "Download do Navegador" || current.title == "Download Aria2") fileName else current.title,
                     progress = progress,
                     status = when(statusAttr) {
                         "active" -> "Baixando..."

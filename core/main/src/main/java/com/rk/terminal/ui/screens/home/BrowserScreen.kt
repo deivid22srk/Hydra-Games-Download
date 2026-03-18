@@ -50,7 +50,7 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
     var showRedirectDialog by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var redirectResult by remember { mutableStateOf<Message?>(null) }
 
-    fun createWebView(initialUrl: String): WebView {
+    fun createWebView(initialUrl: String?): WebView {
         return WebView(context).apply {
             settings.apply {
                 javaScriptEnabled = true
@@ -74,8 +74,8 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
 
                     if (currentUrl.isNotEmpty() && currentUrl != "about:blank") {
                         val newHost = request.url.host
-                        val currentHost = Uri.parse(currentUrl).host
-                        if (newHost != null && newHost != currentHost) {
+                        val currentHost = try { Uri.parse(currentUrl).host } catch (e: Exception) { null }
+                        if (newHost != null && currentHost != null && newHost != currentHost) {
                             showRedirectDialog = "O site está tentando redirecionar para um domínio diferente: $newHost. Deseja prosseguir?" to {
                                 view?.loadUrl(newUrl)
                             }
@@ -89,7 +89,8 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                 override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
                     redirectResult = resultMsg
                     showRedirectDialog = "O site está tentando abrir uma nova guia/janela. Deseja permitir?" to {
-                        val newWv = createWebView("about:blank")
+                        // For popups, we MUST create a WebView that has not navigated yet.
+                        val newWv = createWebView(null)
                         val transport = redirectResult?.obj as? WebView.WebViewTransport
                         transport?.webView = newWv
                         redirectResult?.sendToTarget()
@@ -104,7 +105,9 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
             setDownloadListener { downloadUrl, _, _, _, _ ->
                 showDownloadDialog = downloadUrl
             }
-            loadUrl(initialUrl)
+            if (initialUrl != null) {
+                loadUrl(initialUrl)
+            }
         }
     }
 
@@ -115,6 +118,13 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
             val tab = BrowserTab(webView = wv)
             tabs.add(tab)
             activeTabId = tab.id
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            tabs.forEach { it.webView.destroy() }
+            tabs.clear()
         }
     }
 
