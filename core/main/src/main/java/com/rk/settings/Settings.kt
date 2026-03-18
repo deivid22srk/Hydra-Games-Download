@@ -133,6 +133,10 @@ object Settings {
         get() = Preference.getInt(key = "aria2_max_connections", default = 5)
         set(value) = Preference.setInt(key = "aria2_max_connections", value = value)
 
+    var aria2UserAgent: String
+        get() = Preference.getString(key = "aria2_user_agent", default = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        set(value) = Preference.setString(key = "aria2_user_agent", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

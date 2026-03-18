@@ -207,7 +207,9 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
             params.add(mapOf(
                 "dir" to downloadPath,
                 "max-connection-per-server" to maxConn.toString(),
-                "split" to maxConn.toString()
+                "split" to maxConn.toString(),
+                "user-agent" to Settings.aria2UserAgent,
+                "async-dns" to "false"
             ))
 
             val rpcRequestMap = mapOf(
@@ -254,7 +256,8 @@ private fun startAria2InTerminal(url: String, activity: MainActivity, title: Str
 
         val aria2Cmd = "aria2c --enable-rpc --rpc-listen-all=false --rpc-listen-port=$rpcPort " +
                 (if (rpcSecret.isNotBlank()) "--rpc-secret=\"$rpcSecret\" " else "") +
-                "--dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn \"$url\""
+                "--dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
+                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false \"$url\""
 
         val initialArgs = listOf("sh", "-c", aria2Cmd)
 

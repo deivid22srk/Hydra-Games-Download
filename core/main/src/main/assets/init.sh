@@ -6,11 +6,12 @@ export HOME=/root
 
 if [ ! -s /etc/resolv.conf ]; then
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
 fi
 
 export PS1="\[\e[38;5;46m\]\u\[\033[39m\]@reterm \[\033[39m\]\w \[\033[0m\]\\$ "
 export PIP_BREAK_SYSTEM_PACKAGES=1
-required_packages="bash gcompat glib nano python3 git py3-pip aria2"
+required_packages="bash gcompat glib nano python3 git py3-pip aria2 ca-certificates"
 missing_packages=""
 for pkg in $required_packages; do
     if ! apk info -e $pkg >/dev/null 2>&1; then

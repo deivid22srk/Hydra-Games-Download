@@ -17,6 +17,7 @@ fun Aria2Settings(navController: NavController) {
     var rpcSecret by remember { mutableStateOf(Settings.aria2RpcSecret) }
     var rpcPort by remember { mutableStateOf(Settings.aria2RpcPort.toString()) }
     var maxConnections by remember { mutableStateOf(Settings.aria2MaxConnections.toString()) }
+    var userAgent by remember { mutableStateOf(Settings.aria2UserAgent) }
 
     PreferenceLayout(label = "Configurações Aria2") {
         PreferenceGroup(heading = "RPC") {
@@ -48,6 +49,15 @@ fun Aria2Settings(navController: NavController) {
                     it.toIntOrNull()?.let { conn -> Settings.aria2MaxConnections = conn }
                 },
                 label = { Text("Máximo de Conexões por Servidor") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            OutlinedTextField(
+                value = userAgent,
+                onValueChange = {
+                    userAgent = it
+                    Settings.aria2UserAgent = it
+                },
+                label = { Text("User Agent") },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
