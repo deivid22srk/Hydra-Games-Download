@@ -19,9 +19,15 @@ import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.animations.NavigationAnimationTransitions
 import com.rk.terminal.ui.routes.MainActivityRoutes
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rk.terminal.ui.screens.container.MainContainer
 import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
+import com.rk.terminal.ui.screens.home.GameDetailsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
+import com.rk.terminal.ui.screens.home.HydraSourcesScreen
+import com.rk.terminal.ui.screens.home.SharedGameViewModel
+import com.rk.terminal.ui.screens.settings.FolderPickerScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.Rootfs
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
@@ -67,6 +73,7 @@ fun UpdateStatusBar(mainActivityActivity: MainActivity,show: Boolean = true){
 
 @Composable
 fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostController,mainActivity: MainActivity) {
+    val sharedGameViewModel: SharedGameViewModel = viewModel()
     NavHost(
         navController = navController,
         startDestination = MainActivityRoutes.MainScreen.route,
@@ -85,7 +92,7 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
                     UpdateStatusBar(mainActivity, show = showStatusBar.value)
                 }
 
-                TerminalScreen(mainActivityActivity = mainActivity, navController = navController)
+                MainContainer(mainActivity = mainActivity, navController = navController, sharedGameViewModel = sharedGameViewModel)
             }else{
                 Downloader(mainActivity = mainActivity, navController = navController)
             }
@@ -100,7 +107,23 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         }
         composable(MainActivityRoutes.Home.route) {
             UpdateStatusBar(mainActivity, show = true)
-            HomeScreen()
+            HomeScreen(navController = navController, viewModel = sharedGameViewModel)
+        }
+        composable(MainActivityRoutes.HydraSources.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            HydraSourcesScreen()
+        }
+        composable(MainActivityRoutes.FolderPicker.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            FolderPickerScreen(navController = navController)
+        }
+        composable(MainActivityRoutes.GameDetails.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            GameDetailsScreen(
+                viewModel = sharedGameViewModel,
+                navController = navController,
+                mainActivity = mainActivity
+            )
         }
     }
 }

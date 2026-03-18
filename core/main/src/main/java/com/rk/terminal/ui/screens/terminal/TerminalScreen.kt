@@ -432,7 +432,7 @@ fun TerminalScreen(
                             }
 
                             val density = LocalDensity.current
-                            Column(modifier = Modifier.imePadding().navigationBarsPadding().padding(top = if (showToolbar.value){0.dp}else{
+                            Column(modifier = Modifier.imePadding().padding(top = if (showToolbar.value){0.dp}else{
                                 with(density){
                                     TopAppBarDefaults.windowInsets.getTop(density).toDp()
                                 }

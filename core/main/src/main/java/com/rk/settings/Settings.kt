@@ -98,6 +98,29 @@ object Settings {
         get() = Preference.getBoolean(key = "shortcuts_enabled", default = true)
         set(value) = Preference.setBoolean(key = "shortcuts_enabled", value)
 
+    var hydraSources: List<com.rk.terminal.ui.screens.home.HydraSourceConfig>
+        get() {
+            val json = Preference.getString(key = "hydra_sources_v2", default = "[]")
+            return try {
+                val type = object : com.google.gson.reflect.TypeToken<List<com.rk.terminal.ui.screens.home.HydraSourceConfig>>() {}.type
+                com.google.gson.Gson().fromJson<List<com.rk.terminal.ui.screens.home.HydraSourceConfig>>(json, type) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        set(value) {
+            val json = com.google.gson.Gson().toJson(value)
+            Preference.setString(key = "hydra_sources_v2", value = json)
+        }
+
+    var downloadPath: String
+        get() = Preference.getString(key = "download_path", default = "/sdcard/Download")
+        set(value) = Preference.setString(key = "download_path", value = value)
+
+    var steamGridDbApiKey: String
+        get() = Preference.getString(key = "sgdb_api_key", default = "")
+        set(value) = Preference.setString(key = "sgdb_api_key", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)
@@ -127,10 +150,6 @@ object Preference {
     }
 
     fun removeKey(key: String){
-        if (sharedPreferences.contains(key).not()){
-            return
-        }
-
         sharedPreferences.edit().remove(key).apply()
 
         if (stringCache.containsKey(key)){
@@ -200,7 +219,6 @@ object Preference {
         }.onFailure {
             it.printStackTrace()
         }
-
     }
 
     fun getInt(key: String, default: Int): Int {

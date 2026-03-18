@@ -37,7 +37,16 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
     }
     
     override fun onSessionFinished(finishedSession: TerminalSession) {
+        val sessionId = activity.sessionBinder?.getService()?.sessionList?.entries?.find {
+            activity.sessionBinder?.getSession(it.key) == finishedSession
+        }?.key
 
+        if (sessionId == "GoFileDownload" || sessionId == "BuzzHeavierDownload") {
+            activity.runOnUiThread {
+                val status = if (finishedSession.exitStatus == 0) "concluído com sucesso" else "falhou (código ${finishedSession.exitStatus})"
+                android.widget.Toast.makeText(activity, "Download $sessionId $status", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
     }
     
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {

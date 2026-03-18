@@ -9,11 +9,16 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
 import androidx.compose.runtime.remember
@@ -31,6 +36,8 @@ import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.components.SettingsToggle
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import androidx.core.net.toUri
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Source
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -127,6 +134,19 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
                 })
         }
 
+        PreferenceGroup(heading = "Download") {
+            SettingsCard(
+                title = { Text("Pasta de Download") },
+                description = { Text(Settings.downloadPath) },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                onClick = {
+                    navController.navigate(MainActivityRoutes.FolderPicker.route)
+                }
+            )
+        }
+
         PreferenceGroup(heading = stringResource(strings.input_mode)) {
 
             SettingsCard(
@@ -182,7 +202,61 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
         }
 
 
-        PreferenceGroup {
+        var showApiKeyDialog by remember { mutableStateOf(false) }
+        if (showApiKeyDialog) {
+            var apiKey by remember { mutableStateOf(Settings.steamGridDbApiKey) }
+            AlertDialog(
+                onDismissRequest = { showApiKeyDialog = false },
+                title = { Text("SteamGridDB API Key") },
+                text = {
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = { apiKey = it },
+                        label = { Text("API Key") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        Settings.steamGridDbApiKey = apiKey
+                        showApiKeyDialog = false
+                    }) {
+                        Text("Salvar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showApiKeyDialog = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        PreferenceGroup(heading = "SteamGridDB") {
+            SettingsCard(
+                title = { Text("SteamGridDB API Key") },
+                description = { Text(if (Settings.steamGridDbApiKey.isEmpty()) "Não configurado" else "Configurado") },
+                onClick = {
+                    showApiKeyDialog = true
+                }
+            )
+        }
+
+        PreferenceGroup(heading = "Hydra") {
+            SettingsCard(
+                title = { Text("Fontes Hydra") },
+                description = { Text("Gerenciar links de API do Hydra Launcher") },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.Source, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                endWidget = {
+                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
+                },
+                onClick = {
+                    navController.navigate(MainActivityRoutes.HydraSources.route)
+                }
+            )
+
             SettingsToggle(
                 label = stringResource(strings.customizations),
                 showSwitch = false,
