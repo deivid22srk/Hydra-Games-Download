@@ -203,12 +203,13 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                 "max-connection-per-server" to maxConn.toString(),
                 "split" to maxConn.toString(),
                 "user-agent" to Settings.aria2UserAgent,
-                "async-dns" to "false"
+                "async-dns" to "false",
+                "gid" to downloadId
             ))
 
             val rpcRequestMap = mapOf(
                 "jsonrpc" to "2.0",
-                "id" to downloadId,
+                "id" to "add",
                 "method" to "aria2.addUri",
                 "params" to params
             )

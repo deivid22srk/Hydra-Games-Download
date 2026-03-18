@@ -46,7 +46,11 @@ fun DownloadsScreen() {
         val client = OkHttpClient()
         val gson = Gson()
         while (true) {
-            updateAria2Status(client, gson)
+            try {
+                updateAria2Status(client, gson)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             delay(2000)
         }
     }
@@ -99,12 +103,21 @@ fun DownloadsScreen() {
                             if (!download.isCompleted && download.gid != null) {
                                 Row {
                                     IconButton(onClick = {
-                                        if (download.isPaused) resumeDownload(download.gid)
-                                        else pauseDownload(download.gid)
+                                        val targetGid = download.gid
+                                        if (download.isPaused) {
+                                            resumeDownload(targetGid)
+                                            updateLocalStatus(download.id, isPaused = false, status = "Retomando...")
+                                        } else {
+                                            pauseDownload(targetGid)
+                                            updateLocalStatus(download.id, isPaused = true, status = "Pausando...")
+                                        }
                                     }) {
                                         Icon(if (download.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null)
                                     }
-                                    IconButton(onClick = { removeDownload(download.gid) }) {
+                                    IconButton(onClick = {
+                                        removeDownload(download.gid)
+                                        activeDownloads.removeIf { it.id == download.id }
+                                    }) {
                                         Icon(Icons.Default.Delete, contentDescription = null)
                                     }
                                 }
@@ -159,6 +172,13 @@ fun DownloadsScreen() {
     }
 }
 
+private fun updateLocalStatus(id: String, isPaused: Boolean, status: String) {
+    val index = activeDownloads.indexOfFirst { it.id == id }
+    if (index != -1) {
+        activeDownloads[index] = activeDownloads[index].copy(isPaused = isPaused, status = status)
+    }
+}
+
 private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
     val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
     val secret = Settings.aria2RpcSecret
@@ -206,7 +226,10 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
             val totalLen = (res["totalLength"] as? String)?.toLongOrNull() ?: 0L
             val speed = (res["downloadSpeed"] as? String)?.toLongOrNull() ?: 0L
             val files = res["files"] as? List<Map<String, Any>>
-            val fileName = files?.firstOrNull()?.let { (it["path"] as? String)?.split("/")?.last() } ?: "Download Aria2"
+            val fileName = files?.firstOrNull()?.let {
+                val path = it["path"] as? String
+                if (path.isNullOrEmpty()) "Download Aria2" else path.split("/").last()
+            } ?: "Download Aria2"
 
             val progress = if (totalLen > 0) completedLen.toFloat() / totalLen else 0f
             val speedStr = formatSpeed(speed)
@@ -215,7 +238,7 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
             val isPaused = statusAttr == "paused" || statusAttr == "waiting"
             val isCompleted = statusAttr == "complete"
 
-            val existingIndex = activeDownloads.indexOfFirst { it.gid == gid || (it.gid == null && it.title.contains("Aria2")) }
+            val existingIndex = activeDownloads.indexOfFirst { it.id == gid || it.gid == gid }
             if (existingIndex != -1) {
                 val current = activeDownloads[existingIndex]
                 activeDownloads[existingIndex] = current.copy(
@@ -235,7 +258,7 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
                     isCompleted = isCompleted
                 )
             } else if (!isCompleted) {
-                activeDownloads.add(DownloadProgress(gid, gid, fileName, progress, "Baixando...", speedStr, sizeStr, isPaused = isPaused))
+                activeDownloads.add(DownloadProgress(gid, gid, fileName, progress, "Adicionado", speedStr, sizeStr, isPaused = isPaused))
             }
         }
     }
