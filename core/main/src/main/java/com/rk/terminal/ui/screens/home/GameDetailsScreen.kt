@@ -32,6 +32,13 @@ import java.net.URLEncoder
 import androidx.lifecycle.lifecycleScope
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.settings.WorkingMode
+import java.security.MessageDigest
+
+fun generateGid(url: String): String {
+    val md = MessageDigest.getInstance("MD5")
+    val digest = md.digest(url.toByteArray())
+    return digest.joinToString("") { "%02x".format(it) }.take(16)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,7 +186,7 @@ fun GameDetailsScreen(
 
 fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
     val downloadPath = Settings.downloadPath
-    val downloadId = url.hashCode().toString()
+    val downloadId = generateGid(url)
     if (activeDownloads.none { it.id == downloadId }) {
         activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
     }
@@ -252,14 +259,11 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
 
 private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String) {
     activity.lifecycleScope.launch(Dispatchers.Main) {
-        val rpcSecret = Settings.aria2RpcSecret
-        val rpcPort = Settings.aria2RpcPort
         val maxConn = Settings.aria2MaxConnections
 
-        val aria2Cmd = "aria2c --enable-rpc --rpc-listen-all=false --rpc-listen-port=$rpcPort " +
-                (if (rpcSecret.isNotBlank()) "--rpc-secret=\"$rpcSecret\" " else "") +
-                "--dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
-                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false \"$url\""
+        // Run as standalone download in terminal to avoid port conflicts with daemon
+        val aria2Cmd = "aria2c --dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
+                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --gid=$downloadId \"$url\""
 
         val initialArgs = listOf("sh", "-c", aria2Cmd)
 

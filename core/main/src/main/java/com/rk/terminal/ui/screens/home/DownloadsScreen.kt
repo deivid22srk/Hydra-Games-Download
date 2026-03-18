@@ -219,6 +219,12 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
     val allTasks = active + waiting + stopped
 
     withContext(Dispatchers.Main) {
+        // Build a set of GIDs returned by RPC
+        val rpcGids = allTasks.mapNotNull { it["gid"] as? String }.toSet()
+
+        // Remove items from activeDownloads that are no longer in Aria2 and not completed
+        activeDownloads.removeIf { it.gid != null && it.gid !in rpcGids && !it.isCompleted }
+
         allTasks.forEach { res ->
             val gid = res["gid"] as? String ?: return@forEach
             val statusAttr = res["status"] as? String ?: ""
