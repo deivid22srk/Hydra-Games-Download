@@ -50,7 +50,7 @@ fun SearchScreen(navController: NavController, viewModel: SharedGameViewModel) {
             isResultsMode = true
             scope.launch {
                 val results = withContext(Dispatchers.IO) {
-                    val client = OkHttpClient()
+                    val client = HydraApi.getClient()
                     val gson = Gson()
                     val sources = Settings.hydraSources.filter { it.isEnabled }.map { it.url }
 
@@ -97,7 +97,7 @@ fun SearchScreen(navController: NavController, viewModel: SharedGameViewModel) {
             delay(300)
             withContext(Dispatchers.IO) {
                 try {
-                    val client = OkHttpClient()
+                    val client = HydraApi.getClient()
                     val gson = Gson()
                     val url = "https://hydra-api-us-east-1.losbroxas.org/catalogue/search/suggestions?query=${URLEncoder.encode(searchQuery, "UTF-8")}&limit=5"
                     val request = Request.Builder().url(url).build()

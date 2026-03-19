@@ -56,6 +56,14 @@ data class HydraRepack(
     @SerializedName("repacker") val repacker: String? = null
 )
 
+data class HydraProfile(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("bio") val bio: String? = null,
+    @SerializedName("profileImageUrl") val profileImageUrl: String? = null,
+    @SerializedName("backgroundImageUrl") val backgroundImageUrl: String? = null
+)
+
 data class SGDBResponse(val success: Boolean, val data: List<SGDBGame>)
 data class SGDBGame(val id: Int, val name: String)
 data class SGDBArtResponse(val success: Boolean, val data: List<SGDBArt>)

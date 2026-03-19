@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Gamepad
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +46,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     suspend fun fetchHydraCatalogue(endpoint: String) {
         isSearching = true
         val results = withContext(Dispatchers.IO) {
-            val client = OkHttpClient()
+            val client = HydraApi.getClient()
             val gson = Gson()
             val sources = Settings.hydraSources.filter { it.isEnabled }.map { it.url }
 
@@ -134,6 +135,9 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 actions = {
                     IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Search.route) }) {
                         Icon(Icons.Default.Search, contentDescription = "Pesquisar")
+                    }
+                    IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Profile.route) }) {
+                        Icon(Icons.Default.Person, contentDescription = "Perfil")
                     }
                     TextButton(onClick = { surpriseMe() }) {
                         Text("SURPREENDA-ME")

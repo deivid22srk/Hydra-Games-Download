@@ -10,6 +10,7 @@ sealed class MainActivityRoutes(val route: String) {
     data object FolderPicker : MainActivityRoutes("folder_picker")
     data object GameDetails : MainActivityRoutes("game_details/{title}")
     data object Search : MainActivityRoutes("search")
+    data object Profile : MainActivityRoutes("profile")
     data object Downloads : MainActivityRoutes("downloads")
     data object Aria2Settings : MainActivityRoutes("aria2_settings")
     data object Browser : MainActivityRoutes("browser/{url}")

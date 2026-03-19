@@ -69,7 +69,7 @@ fun GameDetailsScreen(
     LaunchedEffect(gameTitle, gameObjectId, gameShop) {
         if (gameObjectId != null && gameShop != null) {
             withContext(Dispatchers.IO) {
-                val client = OkHttpClient()
+                val client = HydraApi.getClient()
                 val gson = Gson()
                 val baseUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId"
 
@@ -125,7 +125,7 @@ fun GameDetailsScreen(
         if (apiKey.isNotBlank()) {
             withContext(Dispatchers.IO) {
                 try {
-                    val client = OkHttpClient()
+                    val client = HydraApi.getClient()
                     val gson = Gson()
 
                     val gridUrl = if (gameShop == "steam" && gameObjectId != null) {
