@@ -335,15 +335,32 @@ private fun handleImageUpload(
             val uploadSuccess = client.newCall(uploadRequest).execute().use { it.isSuccessful }
 
             if (uploadSuccess) {
-                // 3. Refresh Profile to get the updated image URL
-                val refreshRequest = Request.Builder()
-                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
+                // 3. Update Profile with the final URL
+                val finalImageUrl = presignedUrl.substringBefore("?")
+                val patchBody = if (isProfileImage) {
+                    mapOf("profileImageUrl" to finalImageUrl)
+                } else {
+                    mapOf("backgroundImageUrl" to finalImageUrl)
+                }
+
+                val patchRequest = Request.Builder()
+                    .url("https://hydra-api-us-east-1.losbroxas.org/profile")
+                    .patch(gson.toJson(patchBody).toRequestBody("application/json".toMediaTypeOrNull()))
                     .build()
-                client.newCall(refreshRequest).execute().use { refreshResponse ->
-                    if (refreshResponse.isSuccessful) {
-                        val newProfile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
-                        withContext(Dispatchers.Main) {
-                            onSuccess(newProfile)
+
+                val patchSuccess = client.newCall(patchRequest).execute().use { it.isSuccessful }
+
+                if (patchSuccess) {
+                    // Refresh Profile to get updated data
+                    val refreshRequest = Request.Builder()
+                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
+                        .build()
+                    client.newCall(refreshRequest).execute().use { refreshResponse ->
+                        if (refreshResponse.isSuccessful) {
+                            val newProfile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
+                            withContext(Dispatchers.Main) {
+                                onSuccess(newProfile)
+                            }
                         }
                     }
                 }
