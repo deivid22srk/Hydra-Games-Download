@@ -35,14 +35,12 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
-    var searchQuery by remember { mutableStateOf("") }
-    var suggestions by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var allGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Tendências", "Semanal", "Conquistas", "Busca")
+    val tabs = listOf("Tendências", "Semanal", "Conquistas")
 
     suspend fun fetchHydraCatalogue(endpoint: String) {
         isSearching = true
@@ -81,37 +79,6 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
             0 -> fetchHydraCatalogue("hot")
             1 -> fetchHydraCatalogue("weekly")
             2 -> fetchHydraCatalogue("achievements")
-            3 -> { /* Search mode, don't fetch automatically */ }
-        }
-    }
-
-    LaunchedEffect(searchQuery) {
-        if (selectedTabIndex == 3 && searchQuery.length >= 2) {
-            delay(300)
-            withContext(Dispatchers.IO) {
-                try {
-                    val client = OkHttpClient()
-                    val gson = Gson()
-                    val url = "https://hydra-api-us-east-1.losbroxas.org/catalogue/search/suggestions?query=${URLEncoder.encode(searchQuery, "UTF-8")}&limit=5"
-                    val request = Request.Builder().url(url).build()
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string()
-                            if (!body.isNullOrBlank()) {
-                                val type = object : TypeToken<List<HydraGame>>() {}.type
-                                val results = gson.fromJson<List<HydraGame>>(body, type) ?: emptyList()
-                                withContext(Dispatchers.Main) {
-                                    suggestions = results
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        } else {
-            suggestions = emptyList()
         }
     }
 
@@ -153,52 +120,6 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
         }
     }
 
-    val performSearch = {
-        if (searchQuery.isNotBlank()) {
-            isSearching = true
-            scope.launch {
-                val results = withContext(Dispatchers.IO) {
-                    val client = OkHttpClient()
-                    val gson = Gson()
-                    val sources = Settings.hydraSources.filter { it.isEnabled }.map { it.url }
-
-                    val requestBodyMap = mutableMapOf<String, Any>(
-                        "title" to searchQuery,
-                        "take" to 20,
-                        "skip" to 0,
-                        "downloadSourceIds" to sources
-                    )
-
-                    val requestBodyJson = gson.toJson(requestBodyMap)
-                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-                    val requestBody = requestBodyJson.toRequestBody(mediaType)
-
-                    try {
-                        val request = Request.Builder()
-                            .url("https://hydra-api-us-east-1.losbroxas.org/catalogue/search")
-                            .post(requestBody)
-                            .build()
-
-                        client.newCall(request).execute().use { response ->
-                            if (response.isSuccessful) {
-                                val body = response.body?.string()
-                                if (!body.isNullOrBlank()) {
-                                    val searchResponse = gson.fromJson(body, HydraSearchResponse::class.java)
-                                    searchResponse.edges ?: emptyList()
-                                } else emptyList()
-                            } else emptyList()
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        emptyList()
-                    }
-                }
-
-                allGames = results
-                isSearching = false
-            }
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -211,6 +132,9 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     )
                 },
                 actions = {
+                    IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Search.route) }) {
+                        Icon(Icons.Default.Search, contentDescription = "Pesquisar")
+                    }
                     TextButton(onClick = { surpriseMe() }) {
                         Text("SURPREENDA-ME")
                     }
@@ -237,47 +161,6 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 }
             }
 
-            if (selectedTabIndex == 3) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Digite o nome do jogo...") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { performSearch() }),
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                TextButton(onClick = performSearch) {
-                                    Text("BUSCAR")
-                                }
-                            }
-                        }
-                    )
-
-                    if (suggestions.isNotEmpty()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                            elevation = CardDefaults.cardElevation(4.dp)
-                        ) {
-                            Column {
-                                suggestions.forEach { suggestion ->
-                                    ListItem(
-                                        headlineContent = { Text(suggestion.title ?: "") },
-                                        modifier = Modifier.clickable {
-                                            searchQuery = suggestion.title ?: ""
-                                            suggestions = emptyList()
-                                            performSearch()
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             if (isSearching) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -345,22 +228,6 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                         }
                     }
 
-                    if (allGames.isEmpty() && selectedTabIndex == 3 && searchQuery.isNotEmpty()) {
-                        item {
-                            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Nenhum jogo encontrado.", style = MaterialTheme.typography.bodyLarge)
-                                    Text("Tente outro nome ou adicione mais fontes.", style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    } else if (allGames.isEmpty() && selectedTabIndex == 3 && searchQuery.isEmpty()) {
-                        item {
-                            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Use a barra de pesquisa para buscar jogos.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
                 }
             }
         }
