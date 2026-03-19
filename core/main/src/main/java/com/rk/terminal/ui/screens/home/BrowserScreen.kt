@@ -82,11 +82,6 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val newUrl = request?.url?.toString() ?: return false
 
-                    if (isDownloadUrl(newUrl)) {
-                        showDownloadDialog = newUrl
-                        return true
-                    }
-
                     val currentUrl = view?.url ?: ""
                     if (currentUrl.isNotEmpty() && currentUrl != "about:blank") {
                         val newHost = request.url.host
@@ -102,10 +97,6 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    val failingUrl = request?.url?.toString()
-                    if (request?.isForMainFrame == true && failingUrl != null && isDownloadUrl(failingUrl)) {
-                        showDownloadDialog = failingUrl
-                    }
                 }
             }
             webChromeClient = object : WebChromeClient() {

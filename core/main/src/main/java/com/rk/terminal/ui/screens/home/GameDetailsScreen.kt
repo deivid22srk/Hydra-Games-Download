@@ -73,11 +73,13 @@ fun GameDetailsScreen(
     var localRepacks by remember { mutableStateOf<List<LocalRepack>>(emptyList()) }
     var steamDetails by remember { mutableStateOf<Map<String, Any>?>(null) }
     var showDownloadDialog by remember { mutableStateOf(false) }
+    var isSearchingSources by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(gameTitle, gameObjectId, gameShop) {
         if (gameObjectId != null && gameShop != null) {
+            isSearchingSources = true
             withContext(Dispatchers.IO) {
                 val client = HydraApi.getClient()
                 val gson = Gson()
@@ -153,6 +155,8 @@ fun GameDetailsScreen(
 
                 } catch (e: Exception) {
                     e.printStackTrace()
+                } finally {
+                    isSearchingSources = false
                 }
             }
         }
@@ -265,7 +269,15 @@ fun GameDetailsScreen(
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(16.dp)
                 ) {
-                    Icon(Icons.Default.Download, contentDescription = null)
+                    if (isSearchingSources) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(Icons.Default.Download, contentDescription = null)
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("BAIXAR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
