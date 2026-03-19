@@ -73,18 +73,18 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
-            resValue("string","app_name","ReTerminal")
+            resValue("string","app_name","Hydra Launcher")
         }
         debug{
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-DEBUG"
-            resValue("string","app_name","ReTerminal-Debug")
+            resValue("string","app_name","Hydra Launcher (Debug)")
         }
     }
 
     
     defaultConfig {
-        applicationId = "com.rk.terminal"
+        applicationId = "com.HydraLauncher.UnofficialClient"
         minSdk = 26
         //noinspection ExpiredTargetSdkVersion
         targetSdk = 28

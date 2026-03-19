@@ -207,7 +207,7 @@
 -keepclasseswithmembernames class com.rk.plugin.server.api.API {*;}
 -keepclasseswithmembernames class com.rk.plugin.server.api.PluginLifeCycle  {*;}
 -keepclasseswithmembernames class com.rk.plugin.server.** {*;}
--keep class com.rk.terminal.MainActivity.MainActivity {*;}
+-keep class com.rk.terminal.ui.activities.terminal.MainActivity {*;}
 -keepclasseswithmembernames class com.rk.terminal.App {*;}
 -keepclasseswithmembernames class com.rk.terminal.BaseActivity {*;}
 

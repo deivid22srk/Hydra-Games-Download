@@ -33,24 +33,27 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
-    var allGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) }
+    var trendingGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
+    var weeklyGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
+    var achievementGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
+    var isFetching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Tendências", "Semanal", "Conquistas")
-
-    suspend fun fetchHydraCatalogue(endpoint: String) {
-        isSearching = true
-        val results = withContext(Dispatchers.IO) {
+    suspend fun fetchHydraCatalogue(endpoint: String): List<HydraGame> {
+        return withContext(Dispatchers.IO) {
             val client = HydraApi.getClient()
             val gson = Gson()
             val sources = Settings.hydraSources.filter { it.isEnabled }.map { it.url }
 
-            val urlBuilder = StringBuilder("https://hydra-api-us-east-1.losbroxas.org/catalogue/$endpoint?take=20&skip=0")
+            val urlBuilder = StringBuilder("https://hydra-api-us-east-1.losbroxas.org/catalogue/$endpoint?take=15&skip=0")
             sources.forEach { sourceId ->
                 urlBuilder.append("&downloadSourceIds[]=").append(URLEncoder.encode(sourceId, "UTF-8"))
             }
@@ -71,20 +74,17 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 emptyList()
             }
         }
-        allGames = results
-        isSearching = false
     }
 
-    LaunchedEffect(selectedTabIndex) {
-        when (selectedTabIndex) {
-            0 -> fetchHydraCatalogue("hot")
-            1 -> fetchHydraCatalogue("weekly")
-            2 -> fetchHydraCatalogue("achievements")
-        }
+    LaunchedEffect(Unit) {
+        isFetching = true
+        trendingGames = fetchHydraCatalogue("hot")
+        weeklyGames = fetchHydraCatalogue("weekly")
+        achievementGames = fetchHydraCatalogue("achievements")
+        isFetching = false
     }
 
     val surpriseMe = {
-        isSearching = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 try {
@@ -93,7 +93,6 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     client.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
                             val body = response.body?.string() ?: ""
-                            // Regex to extract title and objectId (Steam app ID)
                             val regex = """href="?https://club.steam250.com/app/(\d+)"?\s+title="?([^">]+)"?""".toRegex()
                             val matches = regex.findAll(body).toList()
                             if (matches.isNotEmpty()) {
@@ -115,9 +114,13 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 }
             }
             if (result != null) {
-                allGames = listOf(result)
+                viewModel.setGame(result.title ?: "Unknown", emptyList())
+                viewModel.selectedGameObjectId = result.objectId
+                viewModel.selectedGameShop = result.shop
+                viewModel.selectedGameCover = result.libraryImageUrl
+                val encodedTitle = URLEncoder.encode(result.title ?: "Unknown", "UTF-8")
+                navController.navigate("game_details/$encodedTitle")
             }
-            isSearching = false
         }
     }
 
@@ -139,9 +142,6 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Profile.route) }) {
                         Icon(Icons.Default.Person, contentDescription = "Perfil")
                     }
-                    TextButton(onClick = { surpriseMe() }) {
-                        Text("SURPREENDA-ME")
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -150,88 +150,119 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.surface,
-                divider = {}
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
-                }
+        if (isFetching) {
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-
-
-            if (isSearching) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Feature Banner (Surprise Me)
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .height(160.dp),
+                    onClick = { surpriseMe() },
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 ) {
-                    items(allGames) { game ->
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                val gameUris = game.uris ?: game.downloadSources?.flatMap { it.uris ?: emptyList() } ?: emptyList()
-                                viewModel.setGame(game.title ?: "Unknown", gameUris)
-                                viewModel.selectedGameObjectId = game.objectId
-                                viewModel.selectedGameShop = game.shop
-                                viewModel.selectedGameCover = game.libraryImageUrl
-
-                                val encodedTitle = URLEncoder.encode(game.title ?: "Unknown", "UTF-8")
-                                navController.navigate("game_details/$encodedTitle")
-                            }
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(24.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = MaterialTheme.shapes.small,
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier.size(80.dp, 45.dp)
+                            Text(
+                                "Descubra algo novo",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                "Deixe o Hydra escolher um jogo para você",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+
+                GameCarouselSection("Em Destaque", trendingGames, navController, viewModel)
+                GameCarouselSection("Bombando na Semana", weeklyGames, navController, viewModel)
+                GameCarouselSection("Conquistas Desafiadoras", achievementGames, navController, viewModel)
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun GameCarouselSection(
+    title: String,
+    games: List<HydraGame>,
+    navController: NavController,
+    viewModel: SharedGameViewModel
+) {
+    if (games.isEmpty()) return
+
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(games) { game ->
+                Card(
+                    modifier = Modifier.width(140.dp),
+                    onClick = {
+                        val gameUris = game.uris ?: game.downloadSources?.flatMap { it.uris ?: emptyList() } ?: emptyList()
+                        viewModel.setGame(game.title ?: "Unknown", gameUris)
+                        viewModel.selectedGameObjectId = game.objectId
+                        viewModel.selectedGameShop = game.shop
+                        viewModel.selectedGameCover = game.libraryImageUrl
+
+                        val encodedTitle = URLEncoder.encode(game.title ?: "Unknown", "UTF-8")
+                        navController.navigate("game_details/$encodedTitle")
+                    }
+                ) {
+                    Column {
+                        Box(modifier = Modifier.height(190.dp).fillMaxWidth()) {
+                            if (game.libraryImageUrl != null) {
+                                AsyncImage(
+                                    model = game.libraryImageUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    if (game.libraryImageUrl != null) {
-                                        AsyncImage(
-                                            model = game.libraryImageUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                        )
-                                    } else {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Gamepad, contentDescription = null)
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = game.title ?: "Sem nome",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = game.shop ?: game.sourceName ?: "Desconhecida",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(end = 8.dp)
-                                        )
-                                    }
+                                    Icon(Icons.Default.Gamepad, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
+                        Text(
+                            text = game.title ?: "Sem nome",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            modifier = Modifier.padding(8.dp)
+                        )
                     }
-
                 }
             }
         }
