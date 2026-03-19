@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-debug:
-    name: Build Debug
+    name: Build Signed Debug Delivery
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +23,12 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Decode and create xed.keystore
+        run: echo "${{ secrets.KEYSTORE }}" | base64 -d > /tmp/xed.keystore
+
+      - name: Decode and create signing.properties
+        run: echo "${{ secrets.PROP }}" | base64 -d > /tmp/signing.properties
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -31,14 +37,20 @@ jobs:
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Build with Gradle
-        run: ./gradlew assembleFdroidDebug && mv app/build/outputs/apk/Fdroid/debug/*.apk app/hydralauncher-debug-${{ env.COMMIT_HASH }}.apk
+        run: ./gradlew assembleFdroidRelease && mv app/build/outputs/apk/Fdroid/release/*.apk app/hydralauncher-${{ env.COMMIT_HASH }}.apk
+        env:
+          KEYSTORE_FILE: /tmp/xed.keystore
+          SIGNING_PROPERTIES_FILE: /tmp/signing.properties
         continue-on-error: false
 
       - name: Archive APK
         uses: actions/upload-artifact@v4
         with:
-          name: HydraLauncher-Debug
-          path: app/hydralauncher-debug-${{ env.COMMIT_HASH }}.apk
+          name: HydraLauncher-Signed
+          path: app/hydralauncher-${{ env.COMMIT_HASH }}.apk
+
+      - name: Delete xed.keystore and signing.properties
+        run: rm /tmp/xed.keystore /tmp/signing.properties
 
       - name: Send APK to Telegram
         if: ${{ success() }}
@@ -47,4 +59,4 @@ jobs:
           -F chat_id="-1003794431460" \
           -F message_thread_id="2" \
           -F caption="${{ github.event.head_commit.message }} by ${{ github.actor }}" \
-          -F document=@"app/hydralauncher-debug-${{ env.COMMIT_HASH }}.apk"
+          -F document=@"app/hydralauncher-${{ env.COMMIT_HASH }}.apk"
