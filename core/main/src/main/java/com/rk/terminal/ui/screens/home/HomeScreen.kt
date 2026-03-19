@@ -22,8 +22,10 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
+import coil.compose.AsyncImage
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,16 +37,84 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     val scope = rememberCoroutineScope()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val uniqueSources = remember(allGames) {
-        listOf("Tudo") + allGames.mapNotNull { it.sourceName }.distinct().sorted()
+    val tabs = listOf("Tendências", "Semanal", "Conquistas", "Busca")
+
+    suspend fun fetchHydraCatalogue(endpoint: String) {
+        isSearching = true
+        val results = withContext(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val gson = Gson()
+            val sources = Settings.hydraSources.filter { it.isEnabled }.map { it.url }
+
+            val urlBuilder = StringBuilder("https://hydra-api-us-east-1.losbroxas.org/catalogue/$endpoint?take=20&skip=0")
+            sources.forEach { sourceId ->
+                urlBuilder.append("&downloadSourceIds[]=").append(URLEncoder.encode(sourceId, "UTF-8"))
+            }
+
+            try {
+                val request = Request.Builder().url(urlBuilder.toString()).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (!body.isNullOrBlank()) {
+                            val type = object : TypeToken<List<HydraGame>>() {}.type
+                            gson.fromJson<List<HydraGame>>(body, type) ?: emptyList()
+                        } else emptyList()
+                    } else emptyList()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
+        allGames = results
+        isSearching = false
     }
 
-    val filteredGames = remember(allGames, selectedTabIndex, uniqueSources) {
-        if (selectedTabIndex == 0 || selectedTabIndex >= uniqueSources.size) {
-            allGames
-        } else {
-            val source = uniqueSources[selectedTabIndex]
-            allGames.filter { it.sourceName == source }
+    LaunchedEffect(selectedTabIndex) {
+        when (selectedTabIndex) {
+            0 -> fetchHydraCatalogue("hot")
+            1 -> fetchHydraCatalogue("weekly")
+            2 -> fetchHydraCatalogue("achievements")
+            3 -> { /* Search mode, don't fetch automatically */ }
+        }
+    }
+
+    val surpriseMe = {
+        isSearching = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val client = OkHttpClient()
+                    val request = Request.Builder().url("https://steam250.com/most_played").build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string() ?: ""
+                            // Regex to extract title and objectId (Steam app ID)
+                            val regex = """href="?https://club.steam250.com/app/(\d+)"?\s+title="?([^">]+)"?""".toRegex()
+                            val matches = regex.findAll(body).toList()
+                            if (matches.isNotEmpty()) {
+                                val randomMatch = matches.random()
+                                val steamId = randomMatch.groupValues[1]
+                                val title = randomMatch.groupValues[2].replace("&#x20;", " ")
+                                HydraGame(
+                                    title = title,
+                                    objectId = steamId,
+                                    shop = "steam",
+                                    libraryImageUrl = "https://shared.steamstatic.com/store_item_assets/steam/apps/$steamId/header.jpg"
+                                )
+                            } else null
+                        } else null
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+            if (result != null) {
+                allGames = listOf(result)
+            }
+            isSearching = false
         }
     }
 
@@ -93,10 +163,15 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Buscar Jogos",
+                        text = "Hydra Launcher",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
+                },
+                actions = {
+                    TextButton(onClick = { surpriseMe() }) {
+                        Text("SURPREENDA-ME")
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -106,40 +181,39 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
         }
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            Box(modifier = Modifier.padding(16.dp)) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Digite o nome do jogo...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { performSearch() }),
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            TextButton(onClick = performSearch) {
-                                Text("BUSCAR")
-                            }
-                        }
-                    }
-                )
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                containerColor = MaterialTheme.colorScheme.surface,
+                divider = {}
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = { Text(title) }
+                    )
+                }
             }
 
-            if (allGames.isNotEmpty() && !isSearching) {
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    edgePadding = 16.dp,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    divider = {}
-                ) {
-                    uniqueSources.forEachIndexed { index, sourceName ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = { Text(sourceName) }
-                        )
-                    }
+            if (selectedTabIndex == 3) {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Digite o nome do jogo...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { performSearch() }),
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                TextButton(onClick = performSearch) {
+                                    Text("BUSCAR")
+                                }
+                            }
+                        }
+                    )
                 }
             }
 
@@ -153,11 +227,16 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredGames) { game ->
+                    items(allGames) { game ->
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                viewModel.setGame(game.title ?: "Unknown", game.uris ?: emptyList())
+                                val gameUris = game.uris ?: game.downloadSources?.flatMap { it.uris ?: emptyList() } ?: emptyList()
+                                viewModel.setGame(game.title ?: "Unknown", gameUris)
+                                viewModel.selectedGameObjectId = game.objectId
+                                viewModel.selectedGameShop = game.shop
+                                viewModel.selectedGameCover = game.libraryImageUrl
+
                                 val encodedTitle = URLEncoder.encode(game.title ?: "Unknown", "UTF-8")
                                 navController.navigate("game_details/$encodedTitle")
                             }
@@ -169,10 +248,19 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                 Surface(
                                     shape = MaterialTheme.shapes.small,
                                     color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier.size(48.dp)
+                                    modifier = Modifier.size(80.dp, 45.dp)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Gamepad, contentDescription = null)
+                                    if (game.libraryImageUrl != null) {
+                                        AsyncImage(
+                                            model = game.libraryImageUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.Gamepad, contentDescription = null)
+                                        }
                                     }
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
@@ -184,27 +272,18 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = game.sourceName ?: "Desconhecida",
+                                            text = game.shop ?: game.sourceName ?: "Desconhecida",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.padding(end = 8.dp)
                                         )
-                                        game.uris?.firstOrNull()?.let {
-                                            Text(
-                                                text = it,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.secondary,
-                                                maxLines = 1,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    if (allGames.isEmpty() && searchQuery.isNotEmpty()) {
+                    if (allGames.isEmpty() && selectedTabIndex == 3 && searchQuery.isNotEmpty()) {
                         item {
                             Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -213,7 +292,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                 }
                             }
                         }
-                    } else if (allGames.isEmpty() && searchQuery.isEmpty()) {
+                    } else if (allGames.isEmpty() && selectedTabIndex == 3 && searchQuery.isEmpty()) {
                         item {
                             Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("Use a barra de pesquisa para buscar jogos.", color = MaterialTheme.colorScheme.onSurfaceVariant)

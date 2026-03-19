@@ -7,9 +7,19 @@ data class HydraSourceConfig(
     val isEnabled: Boolean = true
 )
 
+data class HydraDownloadSource(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("uris") val uris: List<String>? = null
+)
+
 data class HydraGame(
     @SerializedName("title") val title: String? = null,
     @SerializedName("uris") val uris: List<String>? = null,
+    @SerializedName("shop") val shop: String? = null,
+    @SerializedName("objectId") val objectId: String? = null,
+    @SerializedName("libraryImageUrl") val libraryImageUrl: String? = null,
+    @SerializedName("downloadSources") val downloadSources: List<HydraDownloadSource>? = null,
     var sourceName: String? = null
 )
 

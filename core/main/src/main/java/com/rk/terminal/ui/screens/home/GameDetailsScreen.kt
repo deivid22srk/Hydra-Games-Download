@@ -49,10 +49,14 @@ fun GameDetailsScreen(
 ) {
     val gameTitle = viewModel.selectedGameTitle
     val gameUris = viewModel.selectedGameUris
-    var coverUrl by remember { mutableStateOf<String?>(null) }
+    val gameObjectId = viewModel.selectedGameObjectId
+    val gameShop = viewModel.selectedGameShop
+    var coverUrl by remember { mutableStateOf(viewModel.selectedGameCover) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(gameTitle) {
+    LaunchedEffect(gameTitle, gameObjectId, gameShop) {
+        if (coverUrl != null) return@LaunchedEffect
+
         val apiKey = Settings.steamGridDbApiKey
         if (apiKey.isNotBlank()) {
             withContext(Dispatchers.IO) {
@@ -60,30 +64,36 @@ fun GameDetailsScreen(
                     val client = OkHttpClient()
                     val gson = Gson()
 
-                    val searchRequest = Request.Builder()
-                        .url("https://www.steamgriddb.com/api/v2/search/autocomplete/${URLEncoder.encode(gameTitle, "UTF-8")}")
-                        .addHeader("Authorization", "Bearer $apiKey")
-                        .build()
+                    val gridUrl = if (gameShop == "steam" && gameObjectId != null) {
+                        "https://www.steamgriddb.com/api/v2/grids/steam/$gameObjectId"
+                    } else {
+                        val searchRequest = Request.Builder()
+                            .url("https://www.steamgriddb.com/api/v2/search/autocomplete/${URLEncoder.encode(gameTitle, "UTF-8")}")
+                            .addHeader("Authorization", "Bearer $apiKey")
+                            .build()
 
-                    client.newCall(searchRequest).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string()
-                            val searchData = gson.fromJson(body, SGDBResponse::class.java)
-                            val gameId = searchData.data.firstOrNull()?.id
+                        val gameId = client.newCall(searchRequest).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string()
+                                val searchData = gson.fromJson(body, SGDBResponse::class.java)
+                                searchData.data.firstOrNull()?.id
+                            } else null
+                        }
 
-                            if (gameId != null) {
-                                val gridRequest = Request.Builder()
-                                    .url("https://www.steamgriddb.com/api/v2/grids/game/$gameId")
-                                    .addHeader("Authorization", "Bearer $apiKey")
-                                    .build()
+                        if (gameId != null) "https://www.steamgriddb.com/api/v2/grids/game/$gameId" else null
+                    }
 
-                                client.newCall(gridRequest).execute().use { gridResponse ->
-                                    if (gridResponse.isSuccessful) {
-                                        val gridBody = gridResponse.body?.string()
-                                        val artData = gson.fromJson(gridBody, SGDBArtResponse::class.java)
-                                        coverUrl = artData.data.firstOrNull()?.url
-                                    }
-                                }
+                    if (gridUrl != null) {
+                        val gridRequest = Request.Builder()
+                            .url(gridUrl)
+                            .addHeader("Authorization", "Bearer $apiKey")
+                            .build()
+
+                        client.newCall(gridRequest).execute().use { gridResponse ->
+                            if (gridResponse.isSuccessful) {
+                                val gridBody = gridResponse.body?.string()
+                                val artData = gson.fromJson(gridBody, SGDBArtResponse::class.java)
+                                coverUrl = artData.data.firstOrNull()?.url
                             }
                         }
                     }
