@@ -462,6 +462,30 @@ fun repackerName(repack: HydraRepack): String {
     return repack.repacker ?: "Hydra API"
 }
 
+fun getHostFromUrl(url: String): String? {
+    return try {
+        val uri = java.net.URI(url)
+        val host = uri.host?.lowercase() ?: ""
+        when {
+            host.contains("gofile.io") -> "GoFile.io"
+            host.contains("mediafire.com") -> "MediaFire.com"
+            host.contains("mega.nz") -> "Mega.nz"
+            host.contains("1fichier.com") -> "1Fichier.com"
+            host.contains("pixeldrain.com") -> "PixelDrain.com"
+            host.contains("qiwi.gg") -> "Qiwi.gg"
+            host.contains("buzzheavier.com") -> "BuzzHeavier.com"
+            host.contains("krakenfiles.com") -> "KrakenFiles.com"
+            host.contains("datanodes.to") -> "DataNodes.to"
+            host.contains("rapidgator.net") -> "Rapidgator.net"
+            host.contains("uptobox.com") -> "Uptobox.com"
+            host.contains("ddownload.com") -> "DDownload.com"
+            else -> host.replace("www.", "").replaceFirstChar { it.uppercase() }.ifBlank { null }
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
 @Composable
 fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController) {
     OutlinedCard(
@@ -481,7 +505,8 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
                 ) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    val label = if (uri.contains("gofile.io")) "Baixar via GoFile" else "Baixar Agora"
+                    val host = getHostFromUrl(uri)
+                    val label = if (host != null) "Baixar via $host" else "Baixar Agora"
                     Text(label)
                 }
             }
