@@ -14,6 +14,8 @@ object HydraApi {
         .addInterceptor(AuthInterceptor())
         .build()
 
+    private val baseClient = OkHttpClient()
+
     fun getClient(): OkHttpClient = client
 
     private class AuthInterceptor : Interceptor {
@@ -52,7 +54,7 @@ object HydraApi {
         }
 
         private fun refreshAccessToken(): Boolean {
-            val client = OkHttpClient()
+            val client = baseClient
             val gson = Gson()
             val requestBody = mapOf("refreshToken" to Settings.refreshToken)
             val json = gson.toJson(requestBody)

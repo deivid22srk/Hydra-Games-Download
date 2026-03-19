@@ -22,6 +22,7 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
@@ -47,6 +48,13 @@ fun generateGid(url: String): String {
     return digest.joinToString("") { "%02x".format(it) }.take(16)
 }
 
+data class LocalRepack(
+    val title: String,
+    val sourceName: String,
+    val uris: List<String>,
+    val fileSize: String? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameDetailsScreen(
@@ -62,7 +70,9 @@ fun GameDetailsScreen(
     var gameStats by remember { mutableStateOf<HydraGameStats?>(null) }
     var gameAssets by remember { mutableStateOf<HydraGameAssets?>(null) }
     var repacks by remember { mutableStateOf<List<HydraRepack>>(emptyList()) }
+    var localRepacks by remember { mutableStateOf<List<LocalRepack>>(emptyList()) }
     var steamDetails by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var showDownloadDialog by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -113,6 +123,34 @@ fun GameDetailsScreen(
                             }
                         }
                     }
+
+                    // Local Sources Search
+                    val localResults = mutableListOf<LocalRepack>()
+                    Settings.hydraSources.filter { it.isEnabled }.forEach { config ->
+                        try {
+                            client.newCall(Request.Builder().url(config.url).build()).execute().use { response ->
+                                if (response.isSuccessful) {
+                                    val source = gson.fromJson(response.body?.string(), HydraSource::class.java)
+                                    val sourceName = source?.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
+                                    source?.downloads?.filter {
+                                        it.title?.contains(gameTitle, ignoreCase = true) == true ||
+                                        gameTitle.contains(it.title ?: "", ignoreCase = true)
+                                    }?.forEach { game ->
+                                        localResults.add(LocalRepack(
+                                            title = game.title ?: "Sem nome",
+                                            sourceName = sourceName,
+                                            uris = game.uris ?: emptyList(),
+                                            fileSize = game.fileSize
+                                        ))
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    localRepacks = localResults
+
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -221,6 +259,17 @@ fun GameDetailsScreen(
             }
 
             Column(modifier = Modifier.padding(16.dp)) {
+                Button(
+                    onClick = { showDownloadDialog = true },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("BAIXAR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
                 // Info Cards
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val developers = (steamDetails?.get("developers") as? List<*>)?.joinToString(", ") ?: "Desconhecido"
@@ -332,58 +381,96 @@ fun GameDetailsScreen(
                     }
                     Spacer(modifier = Modifier.height(32.dp))
                 }
+            }
+        }
+    }
 
-                // Download Options
-                Text("Opções de Download", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+    if (showDownloadDialog) {
+        ModalBottomSheet(
+            onDismissRequest = { showDownloadDialog = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "Opções de Download",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-                if (repacks.isNotEmpty()) {
-                    repacks.forEach { repack ->
-                        OutlinedCard(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = repack.title ?: "Sem título", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Text(text = "${repack.repacker} • ${repack.fileSize ?: "Desconhecido"}", style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                repack.uris?.forEach { uri ->
-                                    Button(
-                                        onClick = {
-                                            val encodedUrl = URLEncoder.encode(uri, "UTF-8")
-                                            navController.navigate("browser/$encodedUrl")
-                                        },
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                                    ) {
-                                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Baixar Repack", style = MaterialTheme.typography.labelLarge)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (gameUris.isNotEmpty()) {
+                if (repacks.isEmpty() && localRepacks.isEmpty() && gameUris.isEmpty()) {
+                    Text("Nenhuma fonte de download encontrada para este jogo.", modifier = Modifier.padding(vertical = 32.dp))
+                }
+
+                // API Repacks
+                repacks.forEach { repack ->
+                    DownloadOptionItem(
+                        title = repack.title ?: "Sem título",
+                        subtitle = "${repackerName(repack)} • ${repack.fileSize ?: "Desconhecido"}",
+                        uris = repack.uris ?: emptyList(),
+                        navController = navController
+                    )
+                }
+
+                // Local Search Repacks
+                localRepacks.forEach { repack ->
+                    DownloadOptionItem(
+                        title = repack.title,
+                        subtitle = "Fonte: ${repack.sourceName}${if (repack.fileSize != null) " • ${repack.fileSize}" else ""}",
+                        uris = repack.uris,
+                        navController = navController
+                    )
+                }
+
+                // Fallback Direct Links
+                if (repacks.isEmpty() && localRepacks.isEmpty()) {
                     gameUris.forEach { uri ->
-                        OutlinedCard(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        ) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = uri, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
-                                IconButton(onClick = {
-                                    val encodedUrl = URLEncoder.encode(uri, "UTF-8")
-                                    navController.navigate("browser/$encodedUrl")
-                                }) {
-                                    Icon(Icons.Default.Download, contentDescription = null)
-                                }
-                            }
-                        }
+                        DownloadOptionItem(
+                            title = "Link Direto",
+                            subtitle = uri,
+                            uris = listOf(uri),
+                            navController = navController
+                        )
                     }
-                } else {
-                    Text("Nenhum link de download disponível.", modifier = Modifier.padding(vertical = 16.dp))
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+fun repackerName(repack: HydraRepack): String {
+    return repack.repacker ?: "Hydra API"
+}
+
+@Composable
+fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController) {
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(12.dp))
+            uris.forEach { uri ->
+                Button(
+                    onClick = {
+                        val encodedUrl = URLEncoder.encode(uri, "UTF-8")
+                        navController.navigate("browser/$encodedUrl")
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    val label = if (uri.contains("gofile.io")) "Baixar via GoFile" else "Baixar Agora"
+                    Text(label)
                 }
             }
         }

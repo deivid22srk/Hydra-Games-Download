@@ -16,6 +16,7 @@ data class HydraDownloadSource(
 data class HydraGame(
     @SerializedName("title") val title: String? = null,
     @SerializedName("uris") val uris: List<String>? = null,
+    @SerializedName("fileSize") val fileSize: String? = null,
     @SerializedName("shop") val shop: String? = null,
     @SerializedName("objectId") val objectId: String? = null,
     @SerializedName("libraryImageUrl") val libraryImageUrl: String? = null,

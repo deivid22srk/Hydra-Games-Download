@@ -75,17 +75,18 @@ fun ProfileScreen(navController: NavController) {
 
                         client.newCall(request).execute().use { response ->
                             if (response.isSuccessful) {
+                                // Refresh profile
+                                val refreshRequest = Request.Builder()
+                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
+                                    .build()
+                                val newProfile = client.newCall(refreshRequest).execute().use { refreshResponse ->
+                                    if (refreshResponse.isSuccessful) {
+                                        gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
+                                    } else null
+                                }
                                 withContext(Dispatchers.Main) {
                                     isEditing = false
-                                    // Refresh profile
-                                    val refreshRequest = Request.Builder()
-                                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
-                                        .build()
-                                    client.newCall(refreshRequest).execute().use { refreshResponse ->
-                                        if (refreshResponse.isSuccessful) {
-                                            profile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
-                                        }
-                                    }
+                                    if (newProfile != null) profile = newProfile
                                 }
                             }
                         }
@@ -300,8 +301,7 @@ private fun handleImageUpload(
     scope.launch(Dispatchers.IO) {
         try {
             val contentResolver = context.contentResolver
-            val inputStream = contentResolver.openInputStream(uri) ?: return@launch
-            val bytes = inputStream.readBytes()
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch
             val fileName = uri.lastPathSegment ?: "image.png"
             val extension = if (fileName.contains(".")) fileName.substringAfterLast(".") else "png"
 
