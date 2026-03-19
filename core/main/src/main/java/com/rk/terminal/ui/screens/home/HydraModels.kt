@@ -28,6 +28,11 @@ data class HydraSource(
     @SerializedName("downloads") val downloads: List<HydraGame>? = null
 )
 
+data class HydraSearchResponse(
+    @SerializedName("count") val count: Int? = null,
+    @SerializedName("edges") val edges: List<HydraGame>? = null
+)
+
 data class SGDBResponse(val success: Boolean, val data: List<SGDBGame>)
 data class SGDBGame(val id: Int, val name: String)
 data class SGDBArtResponse(val success: Boolean, val data: List<SGDBArt>)

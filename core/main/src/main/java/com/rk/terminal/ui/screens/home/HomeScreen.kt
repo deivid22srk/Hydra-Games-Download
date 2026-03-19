@@ -1,5 +1,6 @@
 package com.rk.terminal.ui.screens.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,17 +22,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     var searchQuery by remember { mutableStateOf("") }
+    var suggestions by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var allGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -80,6 +85,36 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
         }
     }
 
+    LaunchedEffect(searchQuery) {
+        if (selectedTabIndex == 3 && searchQuery.length >= 2) {
+            delay(300)
+            withContext(Dispatchers.IO) {
+                try {
+                    val client = OkHttpClient()
+                    val gson = Gson()
+                    val url = "https://hydra-api-us-east-1.losbroxas.org/catalogue/search/suggestions?query=${URLEncoder.encode(searchQuery, "UTF-8")}&limit=5"
+                    val request = Request.Builder().url(url).build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string()
+                            if (!body.isNullOrBlank()) {
+                                val type = object : TypeToken<List<HydraGame>>() {}.type
+                                val results = gson.fromJson<List<HydraGame>>(body, type) ?: emptyList()
+                                withContext(Dispatchers.Main) {
+                                    suggestions = results
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } else {
+            suggestions = emptyList()
+        }
+    }
+
     val surpriseMe = {
         isSearching = true
         scope.launch {
@@ -121,38 +156,45 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     val performSearch = {
         if (searchQuery.isNotBlank()) {
             isSearching = true
-            selectedTabIndex = 0
-            val sources = Settings.hydraSources.filter { it.isEnabled }
             scope.launch {
                 val results = withContext(Dispatchers.IO) {
-                    val list = mutableListOf<HydraGame>()
                     val client = OkHttpClient()
                     val gson = Gson()
+                    val sources = Settings.hydraSources.filter { it.isEnabled }.map { it.url }
 
-                    sources.forEach { config ->
-                        try {
-                            val request = Request.Builder().url(config.url).build()
-                            client.newCall(request).execute().use { response ->
-                                if (response.isSuccessful) {
-                                    val body = response.body?.string()
-                                    if (!body.isNullOrBlank()) {
-                                        val source = gson.fromJson(body, HydraSource::class.java)
-                                        val sourceName = source?.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
-                                        source?.downloads?.filterNotNull()?.forEach { game ->
-                                            game.sourceName = sourceName
-                                            list.add(game)
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
+                    val requestBodyMap = mutableMapOf<String, Any>(
+                        "title" to searchQuery,
+                        "take" to 20,
+                        "skip" to 0,
+                        "downloadSourceIds" to sources
+                    )
+
+                    val requestBodyJson = gson.toJson(requestBodyMap)
+                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                    val requestBody = requestBodyJson.toRequestBody(mediaType)
+
+                    try {
+                        val request = Request.Builder()
+                            .url("https://hydra-api-us-east-1.losbroxas.org/catalogue/search")
+                            .post(requestBody)
+                            .build()
+
+                        client.newCall(request).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string()
+                                if (!body.isNullOrBlank()) {
+                                    val searchResponse = gson.fromJson(body, HydraSearchResponse::class.java)
+                                    searchResponse.edges ?: emptyList()
+                                } else emptyList()
+                            } else emptyList()
                         }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        emptyList()
                     }
-                    list
                 }
 
-                allGames = results.filter { it.title?.contains(searchQuery, ignoreCase = true) == true }
+                allGames = results
                 isSearching = false
             }
         }
@@ -196,7 +238,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
             }
 
             if (selectedTabIndex == 3) {
-                Box(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -214,6 +256,26 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                             }
                         }
                     )
+
+                    if (suggestions.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            elevation = CardDefaults.cardElevation(4.dp)
+                        ) {
+                            Column {
+                                suggestions.forEach { suggestion ->
+                                    ListItem(
+                                        headlineContent = { Text(suggestion.title ?: "") },
+                                        modifier = Modifier.clickable {
+                                            searchQuery = suggestion.title ?: ""
+                                            suggestions = emptyList()
+                                            performSearch()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
