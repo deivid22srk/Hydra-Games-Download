@@ -6,15 +6,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.TextView
+import androidx.core.text.HtmlCompat
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
@@ -96,7 +103,8 @@ fun GameDetailsScreen(
 
                     // Steam Details
                     if (gameShop == "steam") {
-                        client.newCall(Request.Builder().url("http://store.steampowered.com/api/appdetails?appids=$gameObjectId&l=brazilian").build()).execute().use { response ->
+                        val steamUrl = "https://store.steampowered.com/api/appdetails?appids=$gameObjectId&l=pt"
+                        client.newCall(Request.Builder().url(steamUrl).build()).execute().use { response ->
                             if (response.isSuccessful) {
                                 val body = response.body?.string()
                                 val data = gson.fromJson(body, Map::class.java)
@@ -163,14 +171,16 @@ fun GameDetailsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Detalhes do Jogo") },
+                title = { Text(gameTitle, maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
@@ -182,61 +192,146 @@ fun GameDetailsScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Hero Section
-            Box(modifier = Modifier.fillMaxWidth().height(250.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
                 AsyncImage(
-                    model = gameAssets?.libraryHeroImageUrl ?: coverUrl,
+                    model = steamDetails?.get("background") ?: gameAssets?.libraryHeroImageUrl ?: coverUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    alpha = 0.6f
+                    alpha = 0.5f
                 )
-                if (gameAssets?.logoImageUrl != null) {
-                    AsyncImage(
-                        model = gameAssets?.logoImageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.align(Alignment.Center).height(120.dp).padding(16.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    Text(
-                        text = gameTitle,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Center).padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+
+                Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.BottomStart) {
+                    if (gameAssets?.logoImageUrl != null) {
+                        AsyncImage(
+                            model = gameAssets?.logoImageUrl,
+                            contentDescription = null,
+                            modifier = Modifier.height(80.dp).widthIn(max = 250.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Text(
+                            text = gameTitle,
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
             Column(modifier = Modifier.padding(16.dp)) {
-                // Info Section
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        val developers = (steamDetails?.get("developers") as? List<*>)?.joinToString(", ") ?: "Desconhecido"
-                        val publishers = (steamDetails?.get("publishers") as? List<*>)?.joinToString(", ") ?: "Desconhecido"
-                        val releaseDate = (steamDetails?.get("release_date") as? Map<*, *>)?.get("date") as? String ?: "Desconhecida"
+                // Info Cards
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val developers = (steamDetails?.get("developers") as? List<*>)?.joinToString(", ") ?: "Desconhecido"
+                    val releaseDate = (steamDetails?.get("release_date") as? Map<*, *>)?.get("date") as? String ?: "Desconhecida"
 
-                        Text("Desenvolvedor: $developers", style = MaterialTheme.typography.bodySmall)
-                        Text("Editora: $publishers", style = MaterialTheme.typography.bodySmall)
-                        Text("Lançamento: $releaseDate", style = MaterialTheme.typography.bodySmall)
+                    Card(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Desenvolvedor", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(developers, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        }
+                    }
+                    Card(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Lançamento", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(releaseDate, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        }
                     }
                     if (gameStats != null) {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("${gameStats?.playerCount ?: 0}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            Text("Jogadores Ativos", style = MaterialTheme.typography.labelSmall)
+                        Card(modifier = Modifier.weight(1f)) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Jogadores", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Text("${gameStats?.playerCount ?: 0}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Description Section
+                // Description
                 Text("Sobre o Jogo", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
-                val description = steamDetails?.get("short_description") as? String ?: "Sem descrição disponível."
-                Text(text = description, style = MaterialTheme.typography.bodyMedium)
+                val descriptionHtml = steamDetails?.get("detailed_description") as? String ?: "Sem descrição disponível."
+                AndroidView(
+                    factory = { context ->
+                        TextView(context).apply {
+                            setTextColor(0xFFFFFFFF.toInt()) // Workaround for dark theme
+                            textSize = 14f
+                        }
+                    },
+                    update = { view ->
+                        view.text = HtmlCompat.fromHtml(descriptionHtml, HtmlCompat.FROM_HTML_MODE_LEGACY)
+                    }
+                )
 
                 Spacer(modifier = Modifier.height(32.dp))
+
+                // Media Gallery
+                val screenshots = steamDetails?.get("screenshots") as? List<Map<String, Any>>
+                if (!screenshots.isNullOrEmpty()) {
+                    Text("Galeria", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(screenshots) { screenshot ->
+                            Card(modifier = Modifier.width(280.dp).height(160.dp)) {
+                                AsyncImage(
+                                    model = screenshot["path_thumbnail"],
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+
+                // Requirements
+                val requirements = steamDetails?.get("pc_requirements") as? Map<String, Any>
+                if (requirements != null) {
+                    Text("Requisitos do Sistema", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val minimum = requirements["minimum"] as? String
+                    val recommended = requirements["recommended"] as? String
+
+                    if (minimum != null) {
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Monitor, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Mínimos", fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                AndroidView(
+                                    factory = { context -> TextView(context).apply { textSize = 12f; setTextColor(0xFFCCCCCC.toInt()) } },
+                                    update = { view -> view.text = HtmlCompat.fromHtml(minimum, HtmlCompat.FROM_HTML_MODE_LEGACY) }
+                                )
+                            }
+                        }
+                    }
+
+                    if (recommended != null) {
+                        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Monitor, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Recomendados", fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                AndroidView(
+                                    factory = { context -> TextView(context).apply { textSize = 12f; setTextColor(0xFFCCCCCC.toInt()) } },
+                                    update = { view -> view.text = HtmlCompat.fromHtml(recommended, HtmlCompat.FROM_HTML_MODE_LEGACY) }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
 
                 // Download Options
                 Text("Opções de Download", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -272,7 +367,6 @@ fun GameDetailsScreen(
                         }
                     }
                 } else if (gameUris.isNotEmpty()) {
-                    // Fallback to simple uris if no repacks found
                     gameUris.forEach { uri ->
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)

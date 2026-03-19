@@ -40,12 +40,14 @@ fun SearchScreen(navController: NavController, viewModel: SharedGameViewModel) {
     var allGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var showSuggestions by remember { mutableStateOf(false) }
+    var isResultsMode by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val performSearch = {
         if (searchQuery.isNotBlank()) {
             isSearching = true
             showSuggestions = false
+            isResultsMode = true
             scope.launch {
                 val results = withContext(Dispatchers.IO) {
                     val client = OkHttpClient()
@@ -91,7 +93,7 @@ fun SearchScreen(navController: NavController, viewModel: SharedGameViewModel) {
     }
 
     LaunchedEffect(searchQuery) {
-        if (searchQuery.length >= 2) {
+        if (searchQuery.length >= 2 && !isResultsMode) {
             delay(300)
             withContext(Dispatchers.IO) {
                 try {
@@ -128,7 +130,10 @@ fun SearchScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 title = {
                     OutlinedTextField(
                         value = searchQuery,
-                        onValueChange = { searchQuery = it },
+                        onValueChange = {
+                            searchQuery = it
+                            isResultsMode = false
+                        },
                         placeholder = { Text("Buscar no catálogo...") },
                         modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
                         shape = MaterialTheme.shapes.medium,
@@ -251,6 +256,7 @@ fun SearchScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                 modifier = Modifier.clickable {
                                     searchQuery = suggestion.title ?: ""
                                     showSuggestions = false
+                                    isResultsMode = true
                                     performSearch()
                                 }
                             )
