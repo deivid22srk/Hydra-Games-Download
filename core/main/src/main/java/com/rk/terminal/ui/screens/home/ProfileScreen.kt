@@ -43,7 +43,7 @@ fun ProfileScreen(navController: NavController) {
                 try {
                     val client = HydraApi.getClient()
                     val request = Request.Builder()
-                        .url("https://hydra-api-us-east-1.losbroxas.org/profile")
+                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
                         .addHeader("Authorization", "Bearer ${Settings.accessToken}")
                         .build()
 
@@ -158,7 +158,7 @@ fun ProfileScreen(navController: NavController) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Button(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://auth.losbroxas.org"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://auth.hydralauncher.gg"))
                         context.startActivity(intent)
                     },
                     modifier = Modifier.fillMaxWidth()
