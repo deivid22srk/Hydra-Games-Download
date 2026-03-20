@@ -113,6 +113,27 @@ data class HydraProfile(
     @SerializedName("stats") val stats: HydraUserStats? = null
 )
 
+data class HydraReviewUser(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("profileImageUrl") val profileImageUrl: String? = null
+)
+
+data class HydraReview(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("reviewHtml") val reviewHtml: String? = null,
+    @SerializedName("score") val score: Int? = null,
+    @SerializedName("createdAt") val createdAt: String? = null,
+    @SerializedName("upvotes") val upvotes: Int? = null,
+    @SerializedName("downvotes") val downvotes: Int? = null,
+    @SerializedName("user") val user: HydraReviewUser? = null
+)
+
+data class HydraReviewsResponse(
+    @SerializedName("reviews") val reviews: List<HydraReview>? = null,
+    @SerializedName("totalCount") val totalCount: Int? = null
+)
+
 data class SGDBResponse(val success: Boolean, val data: List<SGDBGame>)
 data class SGDBGame(val id: Int, val name: String)
 data class SGDBArtResponse(val success: Boolean, val data: List<SGDBArt>)
