@@ -49,6 +49,7 @@ import com.rk.terminal.ui.routes.MainActivityRoutes
 fun ProfileScreen(navController: NavController, userId: String? = null) {
     val context = LocalContext.current
     var profile by remember { mutableStateOf<HydraProfile?>(null) }
+    var globalBadges by remember { mutableStateOf<List<HydraBadge>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isEditing by remember { mutableStateOf(false) }
     var editDisplayName by remember { mutableStateOf("") }
@@ -77,6 +78,17 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
         scope.launch(Dispatchers.IO) {
             try {
                 val client = HydraApi.getClient()
+                val gson = Gson()
+                
+                // Fetch Global Badges
+                val badgesRequest = Request.Builder().url("https://hydra-api-us-east-1.losbroxas.org/badges").build()
+                client.newCall(badgesRequest).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val type = object : com.google.gson.reflect.TypeToken<List<HydraBadge>>() {}.type
+                        globalBadges = gson.fromJson(response.body?.string(), type) ?: emptyList()
+                    }
+                }
+
                 val url = if (userId == null) {
                     "https://hydra-api-us-east-1.losbroxas.org/profile/me"
                 } else {
@@ -87,7 +99,7 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string()
-                        val newProfile = Gson().fromJson(body, HydraProfile::class.java)
+                        val newProfile = gson.fromJson(body, HydraProfile::class.java)
                         profile = newProfile
                         if (userId == null && newProfile.id != null) {
                             Settings.userId = newProfile.id
@@ -150,6 +162,16 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
         } else {
             isLoading = false
             profile = null
+        }
+    }
+
+    val formatPlayTime = { seconds: Long ->
+        val minutes = seconds / 60
+        if (minutes < 60) {
+            "$minutes min"
+        } else {
+            val hours = minutes / 60
+            "${hours}h"
         }
     }
 
@@ -328,22 +350,90 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                        profile?.karma?.let { karma ->
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                shape = MaterialTheme.shapes.medium,
-                                modifier = Modifier.padding(bottom = 16.dp)
+                        // User Stats Section
+                        profile?.stats?.let { stats ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                Text(
-                                    text = "Karma: $karma",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Trophy, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text("${stats.unlockedAchievementSum ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("Conquistas", style = MaterialTheme.typography.labelSmall)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("Tempo total", style = MaterialTheme.typography.labelSmall)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text("${profile?.karma ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Text("Karma", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
+
+                        // Recent Games Section
+                        if (!profile?.recentGames.isNullOrEmpty()) {
+                            Text(
+                                text = "Jogos Recentes",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                                textAlign = TextAlign.Start
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(profile?.recentGames ?: emptyList()) { game ->
+                                    Card(
+                                        modifier = Modifier.width(120.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+                                            AsyncImage(
+                                                model = game.iconUrl,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(50.dp).clip(MaterialTheme.shapes.small),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Text(game.title ?: "", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelExtraSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Badges Section
+                        if (!profile?.badges.isNullOrEmpty()) {
+                            Text(
+                                text = "Emblemas",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                                textAlign = TextAlign.Start
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(profile?.badges ?: emptyList()) { badgeName ->
+                                    val badgeDef = globalBadges.find { it.name == badgeName }
+                                    if (badgeDef != null) {
+                                        AsyncImage(
+                                            model = badgeDef.badge?.url,
+                                            contentDescription = badgeDef.title,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         if (!profile?.friends.isNullOrEmpty()) {
                             Text(

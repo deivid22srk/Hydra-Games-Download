@@ -70,6 +70,36 @@ data class HydraFriendRequest(
     @SerializedName("requestState") val requestState: String? = null
 )
 
+data class HydraBadge(
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("badge") val badge: BadgeIcon? = null
+)
+
+data class BadgeIcon(
+    @SerializedName("url") val url: String? = null
+)
+
+data class HydraRecentGame(
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("iconUrl") val iconUrl: String? = null,
+    @SerializedName("playTimeInSeconds") val playTimeInSeconds: Long? = null,
+    @SerializedName("shop") val shop: String? = null,
+    @SerializedName("objectId") val objectId: String? = null
+)
+
+data class HydraStatValue(
+    @SerializedName("value") val value: Double? = null,
+    @SerializedName("topPercentile") val topPercentile: Double? = null
+)
+
+data class HydraUserStats(
+    @SerializedName("unlockedAchievementSum") val unlockedAchievementSum: Int? = null,
+    @SerializedName("totalPlayTimeInSeconds") val totalPlayTimeInSeconds: HydraStatValue? = null,
+    @SerializedName("achievementsPointsEarnedSum") val achievementsPointsEarnedSum: HydraStatValue? = null
+)
+
 data class HydraProfile(
     @SerializedName("id") val id: String? = null,
     @SerializedName("displayName") val displayName: String? = null,
@@ -77,7 +107,10 @@ data class HydraProfile(
     @SerializedName("profileImageUrl") val profileImageUrl: String? = null,
     @SerializedName("backgroundImageUrl") val backgroundImageUrl: String? = null,
     @SerializedName("friends") val friends: List<HydraFriend>? = null,
-    @SerializedName("karma") val karma: Int? = null
+    @SerializedName("karma") val karma: Int? = null,
+    @SerializedName("badges") val badges: List<String>? = null,
+    @SerializedName("recentGames") val recentGames: List<HydraRecentGame>? = null,
+    @SerializedName("stats") val stats: HydraUserStats? = null
 )
 
 data class SGDBResponse(val success: Boolean, val data: List<SGDBGame>)
