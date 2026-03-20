@@ -157,6 +157,22 @@ object Settings {
         get() = Preference.getString(key = "hydra_user_id", default = "")
         set(value) = Preference.setString(key = "hydra_user_id", value = value)
 
+    var userDisplayName: String
+        get() = Preference.getString(key = "hydra_user_display_name", default = "")
+        set(value) = Preference.setString(key = "hydra_user_display_name", value = value)
+
+    var userProfileImageUrl: String
+        get() = Preference.getString(key = "hydra_user_profile_image_url", default = "")
+        set(value) = Preference.setString(key = "hydra_user_profile_image_url", value = value)
+
+    var userBio: String
+        get() = Preference.getString(key = "hydra_user_bio", default = "")
+        set(value) = Preference.setString(key = "hydra_user_bio", value = value)
+
+    var userBackgroundImageUrl: String
+        get() = Preference.getString(key = "hydra_user_background_image_url", default = "")
+        set(value) = Preference.setString(key = "hydra_user_background_image_url", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

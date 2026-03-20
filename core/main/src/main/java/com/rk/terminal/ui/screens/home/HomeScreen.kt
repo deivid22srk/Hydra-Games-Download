@@ -1,7 +1,18 @@
 package com.rk.terminal.ui.screens.home
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -18,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.settings.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,7 +51,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,8 +161,17 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Search.route) }) {
                         Icon(Icons.Default.Search, contentDescription = "Pesquisar")
                     }
-                    IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Profile.route) }) {
-                        Icon(Icons.Default.Person, contentDescription = "Perfil")
+                    IconButton(onClick = { navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", "")) }) {
+                        if (Settings.userProfileImageUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = Settings.userProfileImageUrl,
+                                contentDescription = "Perfil",
+                                modifier = Modifier.size(24.dp).clip(CircleShape),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Default.Person, contentDescription = "Perfil")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

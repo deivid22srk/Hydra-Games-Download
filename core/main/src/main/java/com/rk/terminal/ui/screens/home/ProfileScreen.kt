@@ -48,7 +48,22 @@ import com.rk.terminal.ui.routes.MainActivityRoutes
 @Composable
 fun ProfileScreen(navController: NavController, userId: String? = null) {
     val context = LocalContext.current
-    var profile by remember { mutableStateOf<HydraProfile?>(null) }
+
+    val isMe = userId == null || userId == Settings.userId || (Settings.userId.isNotBlank() && userId == Settings.userId)
+
+    var profile by remember {
+        mutableStateOf<HydraProfile?>(
+            if (isMe && Settings.userDisplayName.isNotBlank()) {
+                HydraProfile(
+                    id = Settings.userId,
+                    displayName = Settings.userDisplayName,
+                    profileImageUrl = Settings.userProfileImageUrl,
+                    backgroundImageUrl = Settings.userBackgroundImageUrl,
+                    bio = Settings.userBio
+                )
+            } else null
+        )
+    }
     var globalBadges by remember { mutableStateOf<List<HydraBadge>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isEditing by remember { mutableStateOf(false) }
@@ -74,7 +89,6 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
         }
     }
     
-    val isMe = userId == null || userId == Settings.userId || (profile != null && profile?.id == Settings.userId)
 
     val profileImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageUpload(it, true, context, scope) { profile = it } }
@@ -112,8 +126,12 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                         val body = response.body?.string()
                         val newProfile = gson.fromJson(body, HydraProfile::class.java)
                         profile = newProfile
-                        if (userId == null && newProfile.id != null) {
-                            Settings.userId = newProfile.id
+                        if (isMe) {
+                            if (newProfile.id != null) Settings.userId = newProfile.id
+                            Settings.userDisplayName = newProfile.displayName ?: ""
+                            Settings.userProfileImageUrl = newProfile.profileImageUrl ?: ""
+                            Settings.userBio = newProfile.bio ?: ""
+                            Settings.userBackgroundImageUrl = newProfile.backgroundImageUrl ?: ""
                         }
                     } else if (response.code == 401) {
                         // Token might be invalid
@@ -666,6 +684,12 @@ private fun handleImageUpload(
                     client.newCall(refreshRequest).execute().use { refreshResponse ->
                         if (refreshResponse.isSuccessful) {
                             val newProfile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
+
+                            Settings.userDisplayName = newProfile.displayName ?: ""
+                            Settings.userProfileImageUrl = newProfile.profileImageUrl ?: ""
+                            Settings.userBio = newProfile.bio ?: ""
+                            Settings.userBackgroundImageUrl = newProfile.backgroundImageUrl ?: ""
+
                             withContext(Dispatchers.Main) {
                                 onSuccess(newProfile)
                             }

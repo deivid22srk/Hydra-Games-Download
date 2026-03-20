@@ -31,10 +31,13 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.google.gson.Gson
 import com.rk.terminal.service.SessionService
 import com.rk.settings.Settings
 import com.rk.terminal.ui.navHosts.MainActivityNavHost
 import com.rk.terminal.ui.routes.MainActivityRoutes
+import com.rk.terminal.ui.screens.home.HydraApi
+import com.rk.terminal.ui.screens.home.HydraProfile
 import com.rk.terminal.ui.screens.settings.WorkingMode
 import com.rk.terminal.ui.screens.terminal.MkSession
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
@@ -43,6 +46,7 @@ import com.rk.terminal.ui.screens.terminal.terminalView
 import com.rk.terminal.ui.theme.KarbonTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import okhttp3.Request
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -190,6 +194,29 @@ class MainActivity : ComponentActivity() {
                         if (userId != null) {
                             Settings.userId = userId
                         }
+
+                        // Fetch profile data
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            try {
+                                val client = HydraApi.getClient()
+                                val request = Request.Builder().url("https://hydra-api-us-east-1.losbroxas.org/profile/me").build()
+                                client.newCall(request).execute().use { response ->
+                                    if (response.isSuccessful) {
+                                        val body = response.body?.string()
+                                        val profile = Gson().fromJson(body, HydraProfile::class.java)
+                                        if (profile != null) {
+                                            Settings.userDisplayName = profile.displayName ?: ""
+                                            Settings.userProfileImageUrl = profile.profileImageUrl ?: ""
+                                            Settings.userBio = profile.bio ?: ""
+                                            Settings.userBackgroundImageUrl = profile.backgroundImageUrl ?: ""
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+
                         android.widget.Toast.makeText(this, "Login realizado com sucesso!", android.widget.Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
