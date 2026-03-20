@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 import com.rk.libcommons.application
+import com.rk.terminal.ui.screens.home.HydraProfile
 import com.rk.terminal.ui.screens.settings.WorkingMode
 import com.rk.terminal.ui.screens.settings.InputMode
 
@@ -173,7 +174,7 @@ object Settings {
         get() = Preference.getString(key = "hydra_user_background_image_url", default = "")
         set(value) = Preference.setString(key = "hydra_user_background_image_url", value = value)
 
-    fun updateFromProfile(profile: com.rk.terminal.ui.screens.home.HydraProfile) {
+    fun updateFromProfile(profile: HydraProfile) {
         if (profile.id != null) userId = profile.id
         userDisplayName = profile.displayName ?: ""
         userProfileImageUrl = profile.profileImageUrl ?: ""
