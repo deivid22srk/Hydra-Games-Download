@@ -541,6 +541,10 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                 "split" to maxConn.toString(),
                 "user-agent" to Settings.aria2UserAgent,
                 "async-dns" to "false",
+                "check-certificate" to "false",
+                "max-tries" to "10",
+                "retry-wait" to "5",
+                "file-allocation" to "none",
                 "gid" to downloadId
             ))
 
@@ -593,7 +597,8 @@ private fun startAria2InTerminal(url: String, activity: MainActivity, title: Str
 
         // Run as standalone download in terminal to avoid port conflicts with daemon
         val aria2Cmd = "aria2c --dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
-                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --gid=$downloadId \"$url\""
+                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --check-certificate=false " +
+                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId \"$url\""
 
         val initialArgs = listOf("sh", "-c", aria2Cmd)
 
