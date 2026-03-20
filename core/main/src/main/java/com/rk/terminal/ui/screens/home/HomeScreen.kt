@@ -31,6 +31,9 @@ import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
 
 
 import androidx.compose.foundation.background
@@ -45,6 +48,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     var weeklyGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var achievementGames by remember { mutableStateOf<List<HydraGame>>(emptyList()) }
     var isFetching by remember { mutableStateOf(false) }
+    var isChoosingRandom by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun fetchHydraCatalogue(endpoint: String): List<HydraGame> {
@@ -85,6 +89,8 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
     }
 
     val surpriseMe = {
+        if (!isChoosingRandom) {
+        isChoosingRandom = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 try {
@@ -121,6 +127,8 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                 val encodedTitle = URLEncoder.encode(result.title ?: "Unknown", "UTF-8")
                 navController.navigate("game_details/$encodedTitle")
             }
+            isChoosingRandom = false
+        }
         }
     }
 
@@ -162,6 +170,17 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     .verticalScroll(rememberScrollState())
             ) {
                 // Feature Banner (Surprise Me)
+                val infiniteTransition = rememberInfiniteTransition(label = "banner")
+                val offset by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1000f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(3000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "offset"
+                )
+
                 ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -173,6 +192,25 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     )
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
+                        if (isChoosingRandom) {
+                            val brush = Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f),
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                ),
+                                start = androidx.compose.ui.geometry.Offset(offset, offset),
+                                end = androidx.compose.ui.geometry.Offset(offset + 500f, offset + 500f)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(brush)
+                                    .blur(20.dp)
+                            )
+                        }
+
                         Column(
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
@@ -188,6 +226,13 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                                 "Deixe o Hydra escolher um jogo para você",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+
+                        if (isChoosingRandom) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
