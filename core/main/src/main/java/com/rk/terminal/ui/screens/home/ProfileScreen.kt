@@ -359,17 +359,17 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Trophy, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     Text("${stats.unlockedAchievementSum ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Text("Conquistas", style = MaterialTheme.typography.labelSmall)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     Text(formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Text("Tempo total", style = MaterialTheme.typography.labelSmall)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.MilitaryTech, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                     Text("${profile?.karma ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Text("Karma", style = MaterialTheme.typography.labelSmall)
                                 }
@@ -401,7 +401,7 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                                                 contentScale = ContentScale.Crop
                                             )
                                             Text(game.title ?: "", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelExtraSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                 }
