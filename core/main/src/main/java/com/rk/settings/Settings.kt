@@ -173,6 +173,14 @@ object Settings {
         get() = Preference.getString(key = "hydra_user_background_image_url", default = "")
         set(value) = Preference.setString(key = "hydra_user_background_image_url", value = value)
 
+    fun updateFromProfile(profile: com.rk.terminal.ui.screens.home.HydraProfile) {
+        if (profile.id != null) userId = profile.id
+        userDisplayName = profile.displayName ?: ""
+        userProfileImageUrl = profile.profileImageUrl ?: ""
+        userBio = profile.bio ?: ""
+        userBackgroundImageUrl = profile.backgroundImageUrl ?: ""
+    }
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

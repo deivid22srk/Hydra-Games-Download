@@ -161,7 +161,7 @@ fun HomeScreen(navController: NavController, viewModel: SharedGameViewModel) {
                     IconButton(onClick = { navController.navigate(com.rk.terminal.ui.routes.MainActivityRoutes.Search.route) }) {
                         Icon(Icons.Default.Search, contentDescription = "Pesquisar")
                     }
-                    IconButton(onClick = { navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", "")) }) {
+                    IconButton(onClick = { navController.navigate("profile") }) {
                         if (Settings.userProfileImageUrl.isNotBlank()) {
                             AsyncImage(
                                 model = Settings.userProfileImageUrl,

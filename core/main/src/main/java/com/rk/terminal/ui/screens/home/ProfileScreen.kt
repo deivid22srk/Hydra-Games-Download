@@ -18,7 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,10 +48,12 @@ import com.rk.terminal.ui.routes.MainActivityRoutes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavController, userId: String? = null) {
+fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
+    val userId = if (userIdArg.isNullOrBlank()) null else userIdArg
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
-    val isMe = userId == null || userId == Settings.userId || (Settings.userId.isNotBlank() && userId == Settings.userId)
+    val isMe = userId == null || (Settings.userId.isNotBlank() && userId == Settings.userId)
 
     var profile by remember {
         mutableStateOf<HydraProfile?>(
@@ -127,11 +131,7 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                         val newProfile = gson.fromJson(body, HydraProfile::class.java)
                         profile = newProfile
                         if (isMe) {
-                            if (newProfile.id != null) Settings.userId = newProfile.id
-                            Settings.userDisplayName = newProfile.displayName ?: ""
-                            Settings.userProfileImageUrl = newProfile.profileImageUrl ?: ""
-                            Settings.userBio = newProfile.bio ?: ""
-                            Settings.userBackgroundImageUrl = newProfile.backgroundImageUrl ?: ""
+                            Settings.updateFromProfile(newProfile)
                         }
                     } else if (response.code == 401) {
                         // Token might be invalid
@@ -369,6 +369,29 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
+
+                        profile?.id?.let { id ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    clipboardManager.setText(AnnotatedString(id))
+                                    android.widget.Toast.makeText(context, "ID copiado!", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Text(
+                                    text = "ID: $id",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copiar ID",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -685,10 +708,7 @@ private fun handleImageUpload(
                         if (refreshResponse.isSuccessful) {
                             val newProfile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
 
-                            Settings.userDisplayName = newProfile.displayName ?: ""
-                            Settings.userProfileImageUrl = newProfile.profileImageUrl ?: ""
-                            Settings.userBio = newProfile.bio ?: ""
-                            Settings.userBackgroundImageUrl = newProfile.backgroundImageUrl ?: ""
+                            Settings.updateFromProfile(newProfile)
 
                             withContext(Dispatchers.Main) {
                                 onSuccess(newProfile)

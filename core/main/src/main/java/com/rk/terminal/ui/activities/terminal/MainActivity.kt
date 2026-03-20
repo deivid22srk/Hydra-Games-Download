@@ -205,10 +205,7 @@ class MainActivity : ComponentActivity() {
                                         val body = response.body?.string()
                                         val profile = Gson().fromJson(body, HydraProfile::class.java)
                                         if (profile != null) {
-                                            Settings.userDisplayName = profile.displayName ?: ""
-                                            Settings.userProfileImageUrl = profile.profileImageUrl ?: ""
-                                            Settings.userBio = profile.bio ?: ""
-                                            Settings.userBackgroundImageUrl = profile.backgroundImageUrl ?: ""
+                                            Settings.updateFromProfile(profile)
                                         }
                                     }
                                 }

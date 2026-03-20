@@ -150,7 +150,7 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
         composable(MainActivityRoutes.Profile.route) { backStackEntry ->
             val userId = backStackEntry.arguments?.getString("userId")
             UpdateStatusBar(mainActivity, show = true)
-            ProfileScreen(navController = navController, userId = userId)
+            ProfileScreen(navController = navController, userIdArg = userId)
         }
     }
 }
