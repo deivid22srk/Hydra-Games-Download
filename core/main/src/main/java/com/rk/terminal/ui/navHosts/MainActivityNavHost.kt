@@ -147,9 +147,10 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
             UpdateStatusBar(mainActivity, show = true)
             SearchScreen(navController = navController, viewModel = sharedGameViewModel)
         }
-        composable(MainActivityRoutes.Profile.route) {
+        composable(MainActivityRoutes.Profile.route) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId")
             UpdateStatusBar(mainActivity, show = true)
-            ProfileScreen(navController = navController)
+            ProfileScreen(navController = navController, userId = userId)
         }
     }
 }

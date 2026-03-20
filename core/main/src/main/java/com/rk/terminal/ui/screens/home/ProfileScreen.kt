@@ -34,10 +34,19 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.rk.terminal.ui.routes.MainActivityRoutes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavController) {
+fun ProfileScreen(navController: NavController, userId: String? = null) {
     val context = LocalContext.current
     var profile by remember { mutableStateOf<HydraProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -45,6 +54,14 @@ fun ProfileScreen(navController: NavController) {
     var editDisplayName by remember { mutableStateOf("") }
     var editBio by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+
+    var showAddFriendDialog by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var friendCodeToAdd by remember { mutableStateOf("") }
+    var reportReason by remember { mutableStateOf("hate") }
+    var reportDescription by remember { mutableStateOf("") }
+
+    val isMe = userId == null || userId == profile?.id
 
     val profileImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageUpload(it, true, context, scope) { profile = it } }
@@ -104,36 +121,86 @@ fun ProfileScreen(navController: NavController) {
 
     val isLoggedIn = Settings.accessToken.isNotBlank()
 
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val client = HydraApi.getClient()
-                    val request = Request.Builder()
-                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
-                        .addHeader("Authorization", "Bearer ${Settings.accessToken}")
-                        .build()
-
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            profile = Gson().fromJson(response.body?.string(), HydraProfile::class.java)
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    isLoading = false
+    val refreshProfile = {
+        isLoading = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val url = if (userId == null) {
+                    "https://hydra-api-us-east-1.losbroxas.org/profile/me"
+                } else {
+                    "https://hydra-api-us-east-1.losbroxas.org/users/$userId"
                 }
+                val request = Request.Builder().url(url).build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        profile = Gson().fromJson(response.body?.string(), HydraProfile::class.java)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoading = false
             }
+        }
+    }
+
+    LaunchedEffect(userId, isLoggedIn) {
+        if (isLoggedIn) {
+            refreshProfile()
         } else {
             isLoading = false
+        }
+    }
+
+    val addFriend = { friendCode: String ->
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val body = Gson().toJson(mapOf("friendCode" to friendCode))
+                    .toRequestBody("application/json".toMediaTypeOrNull())
+                val request = Request.Builder()
+                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests")
+                    .post(body)
+                    .build()
+                client.newCall(request).execute().use { }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    val reportUser = { reason: String, description: String ->
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val body = Gson().toJson(mapOf("reason" to reason, "description" to description))
+                    .toRequestBody("application/json".toMediaTypeOrNull())
+                val request = Request.Builder()
+                    .url("https://hydra-api-us-east-1.losbroxas.org/users/${profile?.id}/report")
+                    .post(body)
+                    .build()
+                client.newCall(request).execute().use { }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    val blockUser = {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val request = Request.Builder()
+                    .url("https://hydra-api-us-east-1.losbroxas.org/users/${profile?.id}/block")
+                    .post("".toRequestBody())
+                    .build()
+                client.newCall(request).execute().use { }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Meu Perfil") },
+                title = { Text(if (isMe) "Meu Perfil" else profile?.displayName ?: "Perfil") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -141,28 +208,38 @@ fun ProfileScreen(navController: NavController) {
                 },
                 actions = {
                     if (isLoggedIn && !isLoading) {
-                        if (isEditing) {
+                        if (isMe) {
+                            if (isEditing) {
+                                IconButton(onClick = { saveProfileChanges() }) {
+                                    Icon(Icons.Default.Save, contentDescription = "Salvar")
+                                }
+                            } else {
+                                IconButton(onClick = {
+                                    editDisplayName = profile?.displayName ?: ""
+                                    editBio = profile?.bio ?: ""
+                                    isEditing = true
+                                }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Editar")
+                                }
+                                IconButton(onClick = { showAddFriendDialog = true }) {
+                                    Icon(Icons.Default.PersonAdd, contentDescription = "Adicionar Amigo")
+                                }
+                            }
                             IconButton(onClick = {
-                                saveProfileChanges()
+                                Settings.accessToken = ""
+                                Settings.refreshToken = ""
+                                Settings.tokenExpiration = 0L
+                                navController.popBackStack()
                             }) {
-                                Icon(Icons.Default.Save, contentDescription = "Salvar")
+                                Icon(Icons.Default.ExitToApp, contentDescription = "Sair")
                             }
                         } else {
-                            IconButton(onClick = {
-                                editDisplayName = profile?.displayName ?: ""
-                                editBio = profile?.bio ?: ""
-                                isEditing = true
-                            }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Editar")
+                            IconButton(onClick = { showReportDialog = true }) {
+                                Icon(Icons.Default.Report, contentDescription = "Denunciar")
                             }
-                        }
-                        IconButton(onClick = {
-                            Settings.accessToken = ""
-                            Settings.refreshToken = ""
-                            Settings.tokenExpiration = 0L
-                            navController.popBackStack()
-                        }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Sair")
+                            IconButton(onClick = { blockUser() }) {
+                                Icon(Icons.Default.Block, contentDescription = "Bloquear")
+                            }
                         }
                     }
                 }
@@ -257,8 +334,66 @@ fun ProfileScreen(navController: NavController) {
                             text = profile?.bio ?: "Nenhuma biografia disponível.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            textAlign = TextAlign.Center
                         )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        profile?.karma?.let { karma ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = MaterialTheme.shapes.medium,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            ) {
+                                Text(
+                                    text = "Karma: $karma",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+
+                        if (!profile?.friends.isNullOrEmpty()) {
+                            Text(
+                                text = "Amigos (${profile?.friends?.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                textAlign = TextAlign.Start
+                            )
+
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(profile?.friends ?: emptyList()) { friend ->
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .width(70.dp)
+                                            .clickable {
+                                                navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", friend.id ?: ""))
+                                            }
+                                    ) {
+                                        AsyncImage(
+                                            model = friend.profileImageUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Text(
+                                            text = friend.displayName ?: "Amigo",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -288,6 +423,65 @@ fun ProfileScreen(navController: NavController) {
                 }
             }
         }
+    }
+
+    if (showAddFriendDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddFriendDialog = false },
+            title = { Text("Adicionar Amigo") },
+            text = {
+                OutlinedTextField(
+                    value = friendCodeToAdd,
+                    onValueChange = { friendCodeToAdd = it },
+                    label = { Text("ID do Amigo") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    addFriend(friendCodeToAdd)
+                    showAddFriendDialog = false
+                }) { Text("Adicionar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddFriendDialog = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    if (showReportDialog) {
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false },
+            title = { Text("Denunciar Perfil") },
+            text = {
+                Column {
+                    val reasons = listOf("hate", "sexual_content", "violence", "spam", "other")
+                    reasons.forEach { reason ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { reportReason = reason }) {
+                            RadioButton(selected = reportReason == reason, onClick = { reportReason = reason })
+                            Text(reason.replace("_", " ").replaceFirstChar { it.uppercase() })
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = reportDescription,
+                        onValueChange = { reportDescription = it },
+                        label = { Text("Descrição") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    reportUser(reportReason, reportDescription)
+                    showReportDialog = false
+                }) { Text("Denunciar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReportDialog = false }) { Text("Cancelar") }
+            }
+        )
     }
 }
 

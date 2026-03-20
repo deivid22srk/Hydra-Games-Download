@@ -57,12 +57,27 @@ data class HydraRepack(
     @SerializedName("repacker") val repacker: String? = null
 )
 
+data class HydraFriend(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("profileImageUrl") val profileImageUrl: String? = null
+)
+
+data class HydraFriendRequest(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("profileImageUrl") val profileImageUrl: String? = null,
+    @SerializedName("requestState") val requestState: String? = null
+)
+
 data class HydraProfile(
     @SerializedName("id") val id: String? = null,
     @SerializedName("displayName") val displayName: String? = null,
     @SerializedName("bio") val bio: String? = null,
     @SerializedName("profileImageUrl") val profileImageUrl: String? = null,
-    @SerializedName("backgroundImageUrl") val backgroundImageUrl: String? = null
+    @SerializedName("backgroundImageUrl") val backgroundImageUrl: String? = null,
+    @SerializedName("friends") val friends: List<HydraFriend>? = null,
+    @SerializedName("karma") val karma: Int? = null
 )
 
 data class SGDBResponse(val success: Boolean, val data: List<SGDBGame>)
