@@ -225,9 +225,10 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
         // Build a set of GIDs returned by RPC
         val rpcGids = allTasks.mapNotNull { it["gid"] as? String }.toSet()
 
-        // Remove items from activeDownloads that are no longer in Aria2 and not completed
-        // This ensures items cleared from Aria2 (but not completed) disappear from UI
-        activeDownloads.removeIf { it.gid != null && it.gid !in rpcGids && !it.isCompleted }
+        // Remove items from activeDownloads that are no longer in Aria2, not completed AND not paused/waiting
+        // This ensures items cleared from Aria2 (but not completed) disappear from UI, 
+        // while allowing paused ones to remain even during status transitions.
+        activeDownloads.removeIf { it.gid != null && it.gid !in rpcGids && !it.isCompleted && !it.isPaused }
 
         allTasks.forEach { res ->
             val gid = res["gid"] as? String ?: return@forEach
@@ -253,10 +254,11 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
             val isPaused = statusAttr == "paused" || statusAttr == "waiting"
             val isCompleted = statusAttr == "complete"
 
-            val existingIndex = activeDownloads.indexOfFirst { it.id == gid || it.gid == gid }
+            val existingIndex = activeDownloads.indexOfFirst { (it.gid != null && it.gid == gid) || it.id == gid }
             if (existingIndex != -1) {
                 val current = activeDownloads[existingIndex]
                 activeDownloads[existingIndex] = current.copy(
+                    id = if (current.id.startsWith("http")) gid else current.id, // Update temp ID to real GID
                     gid = gid,
                     title = if (current.title == "Download do Navegador" || current.title == "Download Aria2") fileName else current.title,
                     progress = progress,
