@@ -181,11 +181,15 @@ class MainActivity : ComponentActivity() {
                     val accessToken = authData["accessToken"] as? String
                     val refreshToken = authData["refreshToken"] as? String
                     val expiresIn = (authData["expiresIn"] as? Double)?.toLong() ?: 0L
+                    val userId = authData["userId"] as? String
 
                     if (accessToken != null && refreshToken != null) {
                         Settings.accessToken = accessToken
                         Settings.refreshToken = refreshToken
                         Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
+                        if (userId != null) {
+                            Settings.userId = userId
+                        }
                         android.widget.Toast.makeText(this, "Login realizado com sucesso!", android.widget.Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {

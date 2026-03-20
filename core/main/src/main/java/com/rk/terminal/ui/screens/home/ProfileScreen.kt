@@ -63,6 +63,17 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
     var reportDescription by remember { mutableStateOf("") }
 
     var isLoggedIn by remember { mutableStateOf(Settings.accessToken.isNotBlank()) }
+    // Update isLoggedIn when Settings.accessToken changes (e.g., after login)
+    LaunchedEffect(Unit) {
+        while(true) {
+            val currentLoginState = Settings.accessToken.isNotBlank()
+            if (isLoggedIn != currentLoginState) {
+                isLoggedIn = currentLoginState
+            }
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    
     val isMe = userId == null || userId == Settings.userId || (profile != null && profile?.id == Settings.userId)
 
     val profileImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->

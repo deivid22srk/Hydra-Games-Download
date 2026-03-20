@@ -82,11 +82,15 @@ object HydraApi {
                     val newAccessToken = data["accessToken"] as? String
                     val newRefreshToken = data["refreshToken"] as? String
                     val expiresIn = (data["expiresIn"] as? Double)?.toLong() ?: 0L
+                    val userId = data["userId"] as? String
 
                     if (newAccessToken != null && newRefreshToken != null) {
                         Settings.accessToken = newAccessToken
                         Settings.refreshToken = newRefreshToken
                         Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
+                        if (userId != null) {
+                            Settings.userId = userId
+                        }
                         true
                     } else false
                 } else {
