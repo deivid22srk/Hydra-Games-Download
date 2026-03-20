@@ -33,7 +33,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ReTerminal"
+rootProject.name = "Hydra Launcher"
 include(":app")
 include(":core:main")
 

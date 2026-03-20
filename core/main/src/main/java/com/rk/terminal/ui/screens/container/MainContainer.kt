@@ -1,7 +1,10 @@
 package com.rk.terminal.ui.screens.container
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
@@ -31,6 +34,7 @@ fun MainContainer(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
@@ -60,7 +64,12 @@ fun MainContainer(
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(WindowInsets.navigationBars)
+        ) {
             when (selectedTab) {
                 0 -> HomeScreen(navController = navController, viewModel = sharedGameViewModel)
                 1 -> TerminalScreen(mainActivityActivity = mainActivity, navController = navController)

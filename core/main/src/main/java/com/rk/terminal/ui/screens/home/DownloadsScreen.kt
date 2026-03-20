@@ -123,6 +123,9 @@ fun DownloadsScreen() {
                                 }
                             } else if (download.isCompleted || download.gid == null) {
                                 IconButton(onClick = {
+                                    if (download.gid != null) {
+                                        removeDownloadResult(download.gid)
+                                    }
                                     activeDownloads.removeIf { it.id == download.id }
                                 }) {
                                     Icon(Icons.Default.Close, contentDescription = null)
@@ -318,6 +321,10 @@ fun resumeDownload(gid: String) {
 
 fun removeDownload(gid: String) {
     callAria2Method("aria2.remove", listOf(gid))
+}
+
+fun removeDownloadResult(gid: String) {
+    callAria2Method("aria2.removeDownloadResult", listOf(gid))
 }
 
 private fun callAria2Method(method: String, params: List<Any>) {

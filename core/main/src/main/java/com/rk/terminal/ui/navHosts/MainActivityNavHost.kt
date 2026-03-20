@@ -25,6 +25,8 @@ import com.rk.terminal.ui.screens.customization.Customization
 import com.rk.terminal.ui.screens.downloader.Downloader
 import com.rk.terminal.ui.screens.home.GameDetailsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
+import com.rk.terminal.ui.screens.home.SearchScreen
+import com.rk.terminal.ui.screens.home.ProfileScreen
 import com.rk.terminal.ui.screens.home.HydraSourcesScreen
 import com.rk.terminal.ui.screens.home.BrowserScreen
 import com.rk.terminal.ui.screens.downloader.SetupExtraScreen
@@ -140,6 +142,14 @@ fun MainActivityNavHost(modifier: Modifier = Modifier,navController: NavHostCont
                 navController = navController,
                 mainActivity = mainActivity
             )
+        }
+        composable(MainActivityRoutes.Search.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            SearchScreen(navController = navController, viewModel = sharedGameViewModel)
+        }
+        composable(MainActivityRoutes.Profile.route) {
+            UpdateStatusBar(mainActivity, show = true)
+            ProfileScreen(navController = navController)
         }
     }
 }

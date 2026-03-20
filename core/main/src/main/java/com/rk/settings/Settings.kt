@@ -141,6 +141,18 @@ object Settings {
         get() = Preference.getBoolean(key = "is_extra_setup_complete", default = false)
         set(value) = Preference.setBoolean(key = "is_extra_setup_complete", value = value)
 
+    var accessToken: String
+        get() = Preference.getString(key = "hydra_access_token", default = "")
+        set(value) = Preference.setString(key = "hydra_access_token", value = value)
+
+    var refreshToken: String
+        get() = Preference.getString(key = "hydra_refresh_token", default = "")
+        set(value) = Preference.setString(key = "hydra_refresh_token", value = value)
+
+    var tokenExpiration: Long
+        get() = Preference.getLong(key = "hydra_token_expiration", default = 0L)
+        set(value) = Preference.setLong(key = "hydra_token_expiration", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

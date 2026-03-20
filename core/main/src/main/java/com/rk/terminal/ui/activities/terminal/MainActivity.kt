@@ -160,7 +160,39 @@ class MainActivity : ComponentActivity() {
         if (intent.hasExtra("awake_intent")){
             moveTaskToBack(true)
         }
+        handleDeepLink(intent)
+    }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent) {
+        val data = intent.data
+        if (data != null && data.scheme == "hydralauncher" && data.host == "auth") {
+            val payload = data.getQueryParameter("payload")
+            if (payload != null) {
+                try {
+                    val decoded = android.util.Base64.decode(payload, android.util.Base64.DEFAULT).decodeToString()
+                    val gson = com.google.gson.Gson()
+                    val authData = gson.fromJson(decoded, Map::class.java)
+
+                    val accessToken = authData["accessToken"] as? String
+                    val refreshToken = authData["refreshToken"] as? String
+                    val expiresIn = (authData["expiresIn"] as? Double)?.toLong() ?: 0L
+
+                    if (accessToken != null && refreshToken != null) {
+                        Settings.accessToken = accessToken
+                        Settings.refreshToken = refreshToken
+                        Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
+                        android.widget.Toast.makeText(this, "Login realizado com sucesso!", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 
     var wasKeyboardOpen = false
