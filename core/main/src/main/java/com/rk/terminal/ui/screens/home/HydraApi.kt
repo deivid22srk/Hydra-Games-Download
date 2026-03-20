@@ -29,6 +29,15 @@ object HydraApi {
 
             var request = originalRequest
             if (Settings.accessToken.isNotBlank()) {
+                // Proactively refresh token if it's expired or about to expire (within 5 minutes)
+                if (Settings.refreshToken.isNotBlank() && System.currentTimeMillis() + 300000 > Settings.tokenExpiration) {
+                    synchronized(this) {
+                        if (System.currentTimeMillis() + 300000 > Settings.tokenExpiration) {
+                            refreshAccessToken()
+                        }
+                    }
+                }
+
                 request = originalRequest.newBuilder()
                     .header("Authorization", "Bearer ${Settings.accessToken}")
                     .build()

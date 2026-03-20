@@ -153,6 +153,10 @@ object Settings {
         get() = Preference.getLong(key = "hydra_token_expiration", default = 0L)
         set(value) = Preference.setLong(key = "hydra_token_expiration", value = value)
 
+    var userId: String
+        get() = Preference.getString(key = "hydra_user_id", default = "")
+        set(value) = Preference.setString(key = "hydra_user_id", value = value)
+
     fun getShortcutBinding(action: com.rk.terminal.ui.screens.terminal.ShortcutAction): com.rk.terminal.ui.screens.terminal.ShortcutBinding {
         val raw = Preference.getString(key = action.prefKey, default = action.default.serialize())
         return com.rk.terminal.ui.screens.terminal.ShortcutBinding.deserialize(raw)

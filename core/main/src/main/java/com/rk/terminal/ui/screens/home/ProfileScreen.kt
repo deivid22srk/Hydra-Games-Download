@@ -61,7 +61,8 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
     var reportReason by remember { mutableStateOf("hate") }
     var reportDescription by remember { mutableStateOf("") }
 
-    val isMe = userId == null || userId == profile?.id
+    var isLoggedIn by remember { mutableStateOf(Settings.accessToken.isNotBlank()) }
+    val isMe = userId == null || userId == Settings.userId || (profile != null && profile?.id == Settings.userId)
 
     val profileImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageUpload(it, true, context, scope) { profile = it } }
@@ -69,6 +70,41 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
 
     val backgroundImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageUpload(it, false, context, scope) { profile = it } }
+    }
+
+    val refreshProfile = {
+        isLoading = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val url = if (userId == null) {
+                    "https://hydra-api-us-east-1.losbroxas.org/profile/me"
+                } else {
+                    "https://hydra-api-us-east-1.losbroxas.org/users/$userId"
+                }
+                val request = Request.Builder().url(url).build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        val newProfile = Gson().fromJson(body, HydraProfile::class.java)
+                        profile = newProfile
+                        if (userId == null && newProfile.id != null) {
+                            Settings.userId = newProfile.id
+                        }
+                    } else if (response.code == 401) {
+                        // Token might be invalid
+                        withContext(Dispatchers.Main) {
+                            isLoggedIn = false
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoading = false
+            }
+        }
     }
 
     val saveProfileChanges = {
@@ -92,19 +128,8 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
 
                         client.newCall(request).execute().use { response ->
                             if (response.isSuccessful) {
-                                // Refresh profile
-                                val refreshRequest = Request.Builder()
-                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
-                                    .build()
-                                val newProfile = client.newCall(refreshRequest).execute().use { refreshResponse ->
-                                    if (refreshResponse.isSuccessful) {
-                                        gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
-                                    } else null
-                                }
-                                withContext(Dispatchers.Main) {
-                                    isEditing = false
-                                    if (newProfile != null) profile = newProfile
-                                }
+                                refreshProfile()
+                                withContext(Dispatchers.Main) { isEditing = false }
                             }
                         }
                     } else {
@@ -119,38 +144,12 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
         }
     }
 
-    val isLoggedIn = Settings.accessToken.isNotBlank()
-
-    val refreshProfile = {
-        isLoading = true
-        scope.launch(Dispatchers.IO) {
-            try {
-                val client = HydraApi.getClient()
-                val url = if (userId == null) {
-                    "https://hydra-api-us-east-1.losbroxas.org/profile/me"
-                } else {
-                    "https://hydra-api-us-east-1.losbroxas.org/users/$userId"
-                }
-                val request = Request.Builder().url(url).build()
-
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        profile = Gson().fromJson(response.body?.string(), HydraProfile::class.java)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
     LaunchedEffect(userId, isLoggedIn) {
         if (isLoggedIn) {
             refreshProfile()
         } else {
             isLoading = false
+            profile = null
         }
     }
 
@@ -224,14 +223,6 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                                 IconButton(onClick = { showAddFriendDialog = true }) {
                                     Icon(Icons.Default.PersonAdd, contentDescription = "Adicionar Amigo")
                                 }
-                            }
-                            IconButton(onClick = {
-                                Settings.accessToken = ""
-                                Settings.refreshToken = ""
-                                Settings.tokenExpiration = 0L
-                                navController.popBackStack()
-                            }) {
-                                Icon(Icons.Default.ExitToApp, contentDescription = "Sair")
                             }
                         } else {
                             IconButton(onClick = { showReportDialog = true }) {
@@ -323,7 +314,7 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                         )
                     } else {
                         Text(
-                            text = profile?.displayName ?: "Sem nome",
+                            text = profile?.displayName ?: "Usuário Hydra",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -392,6 +383,25 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                                         )
                                     }
                                 }
+                            }
+                        }
+
+                        if (isMe) {
+                            Spacer(modifier = Modifier.height(32.dp))
+                            Button(
+                                onClick = {
+                                    Settings.accessToken = ""
+                                    Settings.refreshToken = ""
+                                    Settings.userId = ""
+                                    Settings.tokenExpiration = 0L
+                                    isLoggedIn = false
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.ExitToApp, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("SAIR DA CONTA")
                             }
                         }
                     }
