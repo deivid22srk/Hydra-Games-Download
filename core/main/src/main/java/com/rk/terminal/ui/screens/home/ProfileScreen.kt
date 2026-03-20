@@ -319,24 +319,27 @@ private fun handleImageUpload(
                 .post(gson.toJson(presignedBody).toRequestBody("application/json".toMediaTypeOrNull()))
                 .build()
 
-            val presignedUrl = client.newCall(presignedRequest).execute().use { response ->
+            val responseData = client.newCall(presignedRequest).execute().use { response ->
                 if (response.isSuccessful) {
-                    val data = gson.fromJson(response.body?.string(), Map::class.java)
-                    data["presignedUrl"] as? String
+                    gson.fromJson(response.body?.string(), Map::class.java)
                 } else null
             } ?: return@launch
 
+            val presignedUrl = responseData["presignedUrl"] as? String ?: return@launch
+            val finalImageUrl = (if (isProfileImage) responseData["profileImageUrl"] else responseData["backgroundImageUrl"]) as? String
+                ?: presignedUrl.substringBefore("?")
+
             // 2. Upload binary data to Presigned URL
+            val mimeType = contentResolver.getType(uri) ?: "image/png"
             val uploadRequest = Request.Builder()
                 .url(presignedUrl)
-                .put(bytes.toRequestBody(contentResolver.getType(uri)?.toMediaTypeOrNull()))
+                .put(bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
                 .build()
 
             val uploadSuccess = client.newCall(uploadRequest).execute().use { it.isSuccessful }
 
             if (uploadSuccess) {
                 // 3. Update Profile with the final URL
-                val finalImageUrl = presignedUrl.substringBefore("?")
                 val patchBody = if (isProfileImage) {
                     mapOf("profileImageUrl" to finalImageUrl)
                 } else {
