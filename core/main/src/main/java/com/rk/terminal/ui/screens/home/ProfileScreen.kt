@@ -252,7 +252,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isMe) "Meu Perfil" else profile?.displayName ?: "Perfil") },
+                title = { Text(if (isMe) "Meu Perfil" else profile?.displayName ?: "Perfil", fontWeight = FontWeight.ExtraBold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -286,7 +286,11 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             }
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         }
     ) { padding ->
@@ -294,26 +298,26 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isLoggedIn) {
                 if (isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    Box(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                    Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
                         AsyncImage(
                             model = profile?.backgroundImageUrl,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentScale = ContentScale.Crop,
+                            alpha = 0.8f
                         )
+
                         if (isEditing) {
-                            IconButton(
+                            FilledTonalIconButton(
                                 onClick = { backgroundImageLauncher.launch("image/*") },
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                             ) {
                                 Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Fundo")
                             }
@@ -321,26 +325,25 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         Surface(
                             modifier = Modifier
-                                .size(100.dp)
-                                .align(Alignment.BottomCenter)
-                                .offset(y = 50.dp),
+                                .size(110.dp)
+                                .align(Alignment.BottomCenter),
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.surface,
                             border = androidx.compose.foundation.BorderStroke(4.dp, MaterialTheme.colorScheme.surface),
-                            tonalElevation = 8.dp
+                            tonalElevation = 12.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 AsyncImage(
                                     model = profile?.profileImageUrl,
                                     contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
                                 if (isEditing) {
                                     IconButton(
                                         onClick = { profileImageLauncher.launch("image/*") },
                                         modifier = Modifier.fillMaxSize(),
-                                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.3f))
+                                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.4f))
                                     ) {
                                         Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Foto", tint = Color.White)
                                     }
@@ -349,7 +352,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(56.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (isEditing) {
                         OutlinedTextField(
@@ -374,35 +377,46 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         )
 
                         profile?.id?.let { id ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable {
+                            Surface(
+                                onClick = {
                                     clipboardManager.setText(AnnotatedString(id))
                                     android.widget.Toast.makeText(context, "ID copiado!", android.widget.Toast.LENGTH_SHORT).show()
-                                }
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(top = 4.dp)
                             ) {
-                                Text(
-                                    text = "ID: $id",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Copiar ID",
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = id,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copiar ID",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
                             text = profile?.bio ?: "Nenhuma biografia disponível.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp)
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -433,95 +447,112 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         // Library Quick Access
                         if (isMe) {
-                            OutlinedButton(
+                            Button(
                                 onClick = { navController.navigate(MainActivityRoutes.Library.route) },
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                             ) {
                                 Icon(Icons.Default.LibraryBooks, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("VER MINHA BIBLIOTECA")
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("MINHA BIBLIOTECA", fontWeight = FontWeight.Bold)
                             }
                         }
 
                         // Recent Games Section
                         if (!profile?.recentGames.isNullOrEmpty()) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = "Jogos Recentes",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Start
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 TextButton(onClick = { navController.navigate(MainActivityRoutes.Library.route) }) {
-                                    Text("Ver todos")
+                                    Text("Ver todos", color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(profile?.recentGames ?: emptyList()) { game ->
-                                    Card(
-                                        modifier = Modifier.width(120.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    ElevatedCard(
+                                        modifier = Modifier.width(130.dp),
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(12.dp)) {
                                             AsyncImage(
                                                 model = game.iconUrl,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(50.dp).clip(MaterialTheme.shapes.small),
+                                                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)),
                                                 contentScale = ContentScale.Crop
                                             )
-                                            Text(game.title ?: "", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(game.title ?: "", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                         }
                                     }
                                 }
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(24.dp))
+
                         // Badges Section
                         if (!profile?.badges.isNullOrEmpty()) {
                             Text(
                                 text = "Emblemas",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
                                 textAlign = TextAlign.Start
                             )
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 items(profile?.badges ?: emptyList()) { badgeName ->
                                     val badgeDef = globalBadges.find { it.name == badgeName }
                                     if (badgeDef != null) {
-                                        AsyncImage(
-                                            model = badgeDef.badge?.url,
-                                            contentDescription = badgeDef.title,
-                                            modifier = Modifier.size(40.dp)
-                                        )
+                                        Surface(
+                                            modifier = Modifier.size(50.dp),
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            tonalElevation = 2.dp
+                                        ) {
+                                            AsyncImage(
+                                                model = badgeDef.badge?.url,
+                                                contentDescription = badgeDef.title,
+                                                modifier = Modifier.padding(8.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         if (!profile?.friends.isNullOrEmpty()) {
                             Text(
                                 text = "Amigos (${profile?.friends?.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(vertical = 8.dp),
                                 textAlign = TextAlign.Start
                             )
 
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 items(profile?.friends ?: emptyList()) { friend ->
                                     Column(
@@ -553,8 +584,8 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         }
 
                         if (isMe) {
-                            Spacer(modifier = Modifier.height(32.dp))
-                            Button(
+                            Spacer(modifier = Modifier.height(48.dp))
+                            OutlinedButton(
                                 onClick = {
                                     Settings.accessToken = ""
                                     Settings.refreshToken = ""
@@ -562,13 +593,16 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                     Settings.tokenExpiration = 0L
                                     isLoggedIn = false
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(Icons.Default.ExitToApp, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("SAIR DA CONTA")
+                                Text("SAIR DA CONTA", fontWeight = FontWeight.Bold)
                             }
+                            Spacer(modifier = Modifier.height(32.dp))
                         }
                     }
                 }

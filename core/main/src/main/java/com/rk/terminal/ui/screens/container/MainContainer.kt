@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
@@ -20,7 +19,6 @@ import androidx.navigation.NavController
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.screens.home.DownloadsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
-import com.rk.terminal.ui.screens.home.LibraryScreen
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
 
@@ -54,18 +52,12 @@ fun MainContainer(
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    label = { Text("Biblioteca") },
-                    icon = { Icon(Icons.Default.LibraryBooks, contentDescription = null) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
                     label = { Text("Downloads") },
                     icon = { Icon(Icons.Default.Download, contentDescription = null) }
                 )
                 NavigationBarItem(
-                    selected = selectedTab == 4,
-                    onClick = { selectedTab = 4 },
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     label = { Text("Configurações") },
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) }
                 )
@@ -81,9 +73,8 @@ fun MainContainer(
             when (selectedTab) {
                 0 -> HomeScreen(navController = navController, viewModel = sharedGameViewModel)
                 1 -> TerminalScreen(mainActivityActivity = mainActivity, navController = navController)
-                2 -> LibraryScreen(navController = navController, viewModel = sharedGameViewModel)
-                3 -> DownloadsScreen()
-                4 -> Settings(navController = navController, mainActivity = mainActivity)
+                2 -> DownloadsScreen()
+                3 -> Settings(navController = navController, mainActivity = mainActivity)
             }
         }
     }

@@ -8,7 +8,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -83,6 +85,7 @@ fun GameDetailsScreen(
     var showDownloadDialog by remember { mutableStateOf(false) }
     var isSearchingSources by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
+    var isAddingToLibrary by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -228,6 +231,41 @@ fun GameDetailsScreen(
         }
     }
 
+    val addToLibrary = {
+        if (!isAddingToLibrary && gameObjectId != null && gameShop != null) {
+            isAddingToLibrary = true
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val client = HydraApi.getClient()
+                    val gson = Gson()
+                    val body = mapOf(
+                        "objectId" to gameObjectId,
+                        "shop" to gameShop,
+                        "playTimeInMilliseconds" to 0
+                    )
+                    val request = Request.Builder()
+                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
+                        .post(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        withContext(Dispatchers.Main) {
+                            if (response.isSuccessful) {
+                                android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(mainActivity, "Erro ao adicionar.", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    withContext(Dispatchers.Main) { isAddingToLibrary = false }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -237,10 +275,22 @@ fun GameDetailsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
+                actions = {
+                    if (Settings.userId.isNotBlank()) {
+                        IconButton(onClick = { addToLibrary() }, enabled = !isAddingToLibrary) {
+                            if (isAddingToLibrary) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.LibraryAdd, contentDescription = "Adicionar à Biblioteca")
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
