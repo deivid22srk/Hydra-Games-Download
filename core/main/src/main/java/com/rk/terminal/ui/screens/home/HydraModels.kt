@@ -67,9 +67,17 @@ data class HydraFriend(
 
 data class HydraFriendRequest(
     @SerializedName("id") val id: String? = null,
-    @SerializedName("displayName") val displayName: String? = null,
-    @SerializedName("profileImageUrl") val profileImageUrl: String? = null,
-    @SerializedName("requestState") val requestState: String? = null
+    @SerializedName("AId") val AId: String? = null,
+    @SerializedName("BId") val BId: String? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("createdAt") val createdAt: String? = null,
+    @SerializedName("A") val userA: HydraFriend? = null,
+    @SerializedName("B") val userB: HydraFriend? = null
+)
+
+data class HydraFriendRequestsResponse(
+    @SerializedName("incoming") val incoming: List<HydraFriendRequest>? = null,
+    @SerializedName("outgoing") val outgoing: List<HydraFriendRequest>? = null
 )
 
 data class HydraBadge(

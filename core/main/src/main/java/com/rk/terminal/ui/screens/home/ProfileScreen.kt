@@ -2,20 +2,22 @@ package com.rk.terminal.ui.screens.home
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -31,6 +33,7 @@ import coil.compose.AsyncImage
 import com.google.gson.Gson
 import com.rk.settings.Settings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -43,12 +46,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.rk.terminal.ui.routes.MainActivityRoutes
+import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +76,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
         )
     }
     var globalBadges by remember { mutableStateOf<List<HydraBadge>>(emptyList()) }
+    var friendRequests by remember { mutableStateOf<HydraFriendRequestsResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isEditing by remember { mutableStateOf(false) }
     var editDisplayName by remember { mutableStateOf("") }
@@ -86,14 +90,74 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
     var reportDescription by remember { mutableStateOf("") }
 
     var isLoggedIn by remember { mutableStateOf(Settings.accessToken.isNotBlank()) }
-    // Update isLoggedIn when Settings.accessToken changes (e.g., after login)
+    var tokenRefreshIndicator by remember { mutableStateOf(false) }
+    
+    // Token refresh and session management
     LaunchedEffect(Unit) {
         while(true) {
             val currentLoginState = Settings.accessToken.isNotBlank()
             if (isLoggedIn != currentLoginState) {
                 isLoggedIn = currentLoginState
             }
-            kotlinx.coroutines.delay(1000)
+            
+            // Auto-refresh token if expiring soon (within 10 minutes)
+            if (isLoggedIn && Settings.refreshToken.isNotBlank()) {
+                val timeUntilExpiration = Settings.tokenExpiration - System.currentTimeMillis()
+                if (timeUntilExpiration > 0 && timeUntilExpiration < 600000) { // 10 minutes
+                    tokenRefreshIndicator = true
+                    withContext(Dispatchers.IO) {
+                        try {
+                            val client = HydraApi.getClient()
+                            val gson = Gson()
+                            val requestBody = mapOf("refreshToken" to Settings.refreshToken)
+                            val json = gson.toJson(requestBody)
+                            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
+
+                            val request = Request.Builder()
+                                .url("https://hydra-api-us-east-1.losbroxas.org/auth/refresh")
+                                .post(body)
+                                .build()
+
+                            client.newCall(request).execute().use { response ->
+                                if (response.isSuccessful) {
+                                    val respBody = response.body?.string()
+                                    val data = gson.fromJson(respBody, Map::class.java)
+                                    val newAccessToken = data["accessToken"] as? String
+                                    val newRefreshToken = data["refreshToken"] as? String
+                                    val expiresIn = (data["expiresIn"] as? Number)?.toLong() ?: 0L
+
+                                    if (newAccessToken != null && newRefreshToken != null) {
+                                        Settings.accessToken = newAccessToken
+                                        Settings.refreshToken = newRefreshToken
+                                        Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
+                                        android.util.Log.d("ProfileScreen", "Token refreshed successfully. New expiration: ${Settings.tokenExpiration}")
+                                    }
+                                } else {
+                                    android.util.Log.e("ProfileScreen", "Token refresh failed: ${response.code}")
+                                    if (response.code == 401) {
+                                        // Token refresh failed completely - force logout
+                                        Settings.accessToken = ""
+                                        Settings.refreshToken = ""
+                                        Settings.userId = ""
+                                        Settings.tokenExpiration = 0L
+                                        withContext(Dispatchers.Main) {
+                                            isLoggedIn = false
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("ProfileScreen", "Token refresh error", e)
+                        } finally {
+                            withContext(Dispatchers.Main) {
+                                tokenRefreshIndicator = false
+                            }
+                        }
+                    }
+                }
+            }
+            
+            delay(30000) // Check every 30 seconds
         }
     }
     
@@ -141,6 +205,18 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         // Token might be invalid
                         withContext(Dispatchers.Main) {
                             isLoggedIn = false
+                        }
+                    }
+                }
+                
+                // Buscar pedidos de amizade se for meu perfil
+                if (isMe) {
+                    val friendRequestsUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests"
+                    val friendRequestsReq = Request.Builder().url(friendRequestsUrl).build()
+                    client.newCall(friendRequestsReq).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string()
+                            friendRequests = gson.fromJson(body, HydraFriendRequestsResponse::class.java)
                         }
                     }
                 }
@@ -307,24 +383,31 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                 if (isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
+                    // Modern Hero Banner com parallax effect
+                    Box(modifier = Modifier.fillMaxWidth().height(280.dp)) {
+                        // Background blur effect
                         AsyncImage(
                             model = profile?.backgroundImageUrl,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            modifier = Modifier.fillMaxWidth().height(240.dp).blur(8.dp),
                             contentScale = ContentScale.Crop,
-                            alpha = 0.7f
+                            alpha = 0.4f
                         )
-
-                        // Gradient Scrim for better text readability and look
+                        
+                        // Gradient overlay for depth
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(180.dp)
+                                .height(240.dp)
                                 .background(
                                     Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
-                                        startY = 100f
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                            MaterialTheme.colorScheme.surface
+                                        ),
+                                        startY = 0f,
+                                        endY = 800f
                                     )
                                 )
                         )
@@ -338,29 +421,53 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             }
                         }
 
+                        // Modern floating avatar with glow effect
                         Surface(
                             modifier = Modifier
-                                .size(110.dp)
+                                .size(130.dp)
                                 .align(Alignment.BottomCenter),
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface,
-                            border = androidx.compose.foundation.BorderStroke(4.dp, MaterialTheme.colorScheme.surface),
-                            tonalElevation = 16.dp
+                            border = androidx.compose.foundation.BorderStroke(5.dp, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                            tonalElevation = 8.dp,
+                            shadowElevation = 16.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
+                                // Glow ring effect
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(4.dp)
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                                    Color.Transparent
+                                                )
+                                            ),
+                                            CircleShape
+                                        )
+                                )
+                                
                                 AsyncImage(
                                     model = profile?.profileImageUrl,
                                     contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(8.dp)
+                                        .clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
+                                
                                 if (isEditing) {
                                     IconButton(
                                         onClick = { profileImageLauncher.launch("image/*") },
                                         modifier = Modifier.fillMaxSize(),
-                                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.4f))
+                                        colors = IconButtonDefaults.iconButtonColors(
+                                            containerColor = Color.Black.copy(alpha = 0.6f)
+                                        )
                                     ) {
-                                        Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Foto", tint = Color.White)
+                                        Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Foto", tint = Color.White, modifier = Modifier.size(32.dp))
                                     }
                                 }
                             }
@@ -436,27 +543,54 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // User Stats Section
+                        // Modern Stats Section with animations
                         profile?.stats?.let { stats ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            Text(
+                                text = "Estat\u00edsticas",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 12.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                StatCard(
-                                    icon = Icons.Default.EmojiEvents,
-                                    value = "${stats.unlockedAchievementSum ?: 0}",
-                                    label = "Conquistas"
-                                )
-                                StatCard(
-                                    icon = Icons.Default.History,
-                                    value = formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L),
-                                    label = "Tempo total"
-                                )
-                                StatCard(
-                                    icon = Icons.Default.Star,
-                                    value = "${profile?.karma ?: 0}",
-                                    label = "Karma"
-                                )
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(300, delayMillis = 100))
+                                ) {
+                                    StatCard(
+                                        icon = Icons.Default.EmojiEvents,
+                                        value = "${stats.unlockedAchievementSum ?: 0}",
+                                        label = "Conquistas"
+                                    )
+                                }
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(300, delayMillis = 200))
+                                ) {
+                                    StatCard(
+                                        icon = Icons.Default.History,
+                                        value = formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L),
+                                        label = "Tempo total"
+                                    )
+                                }
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(300, delayMillis = 300))
+                                ) {
+                                    StatCard(
+                                        icon = Icons.Default.Star,
+                                        value = "${profile?.karma ?: 0}",
+                                        label = "Karma"
+                                    )
+                                }
                             }
                         }
 
@@ -555,6 +689,127 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
+
+                        // Pedidos de Amizade Pendentes (apenas para meu perfil)
+                        if (isMe && !friendRequests?.incoming.isNullOrEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 24.dp, bottom = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Solicita\u00e7\u00f5es de Amizade",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "${friendRequests?.incoming?.size}",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            friendRequests?.incoming?.forEach { request ->
+                                val requester = request.userA
+                                if (requester != null) {
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                AsyncImage(
+                                                    model = requester.profileImageUrl,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(48.dp).clip(CircleShape),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(
+                                                        text = requester.displayName ?: "Usu\u00e1rio",
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "Pedido de amizade",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                FilledTonalIconButton(
+                                                    onClick = {
+                                                        scope.launch(Dispatchers.IO) {
+                                                            try {
+                                                                val client = HydraApi.getClient()
+                                                                val acceptRequest = Request.Builder()
+                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}/accept")
+                                                                    .patch("".toRequestBody())
+                                                                    .build()
+                                                                client.newCall(acceptRequest).execute().use {
+                                                                    if (it.isSuccessful) {
+                                                                        refreshProfile()
+                                                                    }
+                                                                }
+                                                            } catch (e: Exception) { e.printStackTrace() }
+                                                        }
+                                                    },
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                                                    )
+                                                ) {
+                                                    Icon(Icons.Default.Check, contentDescription = "Aceitar")
+                                                }
+                                                FilledTonalIconButton(
+                                                    onClick = {
+                                                        scope.launch(Dispatchers.IO) {
+                                                            try {
+                                                                val client = HydraApi.getClient()
+                                                                val rejectRequest = Request.Builder()
+                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}/refuse")
+                                                                    .patch("".toRequestBody())
+                                                                    .build()
+                                                                client.newCall(rejectRequest).execute().use {
+                                                                    if (it.isSuccessful) {
+                                                                        refreshProfile()
+                                                                    }
+                                                                }
+                                                            } catch (e: Exception) { e.printStackTrace() }
+                                                        }
+                                                    },
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                                    )
+                                                ) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Recusar")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
 
                         if (!profile?.friends.isNullOrEmpty()) {
                             Text(
@@ -713,17 +968,48 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
 @Composable
 fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
-    Card(
-        modifier = Modifier.width(100.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ElevatedCard(
+        modifier = Modifier.width(110.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 8.dp
+        )
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(8.dp).fillMaxWidth()
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
