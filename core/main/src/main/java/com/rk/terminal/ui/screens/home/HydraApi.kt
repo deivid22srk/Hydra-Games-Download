@@ -93,7 +93,7 @@ object HydraApi {
                     val data = gson.fromJson(respBody, Map::class.java)
                     val newAccessToken = data["accessToken"] as? String
                     val newRefreshToken = data["refreshToken"] as? String
-                    val expiresIn = (data["expiresIn"] as? Double)?.toLong() ?: 0L
+                    val expiresIn = (data["expiresIn"] as? Number)?.toLong() ?: 0L
                     val userId = data["userId"] as? String
 
                     if (newAccessToken != null && newRefreshToken != null) {

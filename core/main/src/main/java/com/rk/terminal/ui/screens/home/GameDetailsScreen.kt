@@ -259,7 +259,8 @@ fun GameDetailsScreen(
                     val body = mapOf(
                         "objectId" to gameObjectId,
                         "shop" to gameShop,
-                        "playTimeInMilliseconds" to 0
+                        "playTimeInMilliseconds" to 0,
+                        "lastTimePlayed" to null
                     )
                     val request = Request.Builder()
                         .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
