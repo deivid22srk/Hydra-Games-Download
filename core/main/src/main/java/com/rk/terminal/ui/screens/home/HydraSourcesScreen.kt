@@ -14,12 +14,43 @@ import androidx.compose.ui.unit.dp
 import com.rk.settings.Settings
 import com.rk.components.compose.preferences.base.PreferenceLayout
 
+import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HydraSourcesScreen() {
     val sources = remember { mutableStateListOf<HydraSourceConfig>().apply { addAll(Settings.hydraSources) } }
     var showAddDialog by remember { mutableStateOf(false) }
     var newSourceUrl by remember { mutableStateOf("") }
+    val sourceInfoMap = remember { mutableStateMapOf<String, HydraSource>() }
+
+    LaunchedEffect(sources.size) {
+        withContext(Dispatchers.IO) {
+            val client = HydraApi.getClient()
+            val gson = Gson()
+            sources.forEach { config ->
+                try {
+                    val request = Request.Builder().url(config.url).build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string()
+                            val source = gson.fromJson(body, HydraSource::class.java)
+                            if (source != null) {
+                                withContext(Dispatchers.Main) {
+                                    sourceInfoMap[config.url] = source
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
 
     PreferenceLayout(label = "Fontes Hydra") {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -48,6 +79,7 @@ fun HydraSourcesScreen() {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     sources.forEach { config ->
+                        val info = sourceInfoMap[config.url]
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -57,11 +89,26 @@ fun HydraSourcesScreen() {
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = config.url,
+                                        text = info?.name ?: config.url,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
+                                        fontWeight = FontWeight.Bold,
                                         maxLines = 1
                                     )
+                                    if (info != null) {
+                                        Text(
+                                            text = "${info.downloads?.size ?: 0} jogos disponíveis",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    if (info?.name != null) {
+                                        Text(
+                                            text = config.url,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
 
                                 Switch(

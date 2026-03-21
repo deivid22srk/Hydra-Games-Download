@@ -802,8 +802,8 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, onL
             if (rpcSecret.isNotBlank()) {
                 params.add("token:$rpcSecret")
             }
-            params.add(listOf(finalUrl))
-            val options = mutableMapOf(
+            params.add(listOf(finalUrl) as Any)
+            val options = mutableMapOf<String, Any>(
                 "dir" to downloadPath,
                 "max-connection-per-server" to maxConn.toString(),
                 "split" to maxConn.toString(),
@@ -816,7 +816,7 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, onL
                 "gid" to downloadId
             )
             if (header != null) {
-                options["header"] = header!!
+                options["header"] = listOf(header!!)
             }
             params.add(options)
 
