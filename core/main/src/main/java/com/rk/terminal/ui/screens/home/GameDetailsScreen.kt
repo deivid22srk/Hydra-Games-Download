@@ -77,6 +77,7 @@ fun GameDetailsScreen(
     val gameObjectId = viewModel.selectedGameObjectId
     val gameShop = viewModel.selectedGameShop
     var coverUrl by remember { mutableStateOf(viewModel.selectedGameCover) }
+    var isResolvingLink by remember { mutableStateOf(false) }
     var gameStats by remember { mutableStateOf<HydraGameStats?>(null) }
     var gameAssets by remember { mutableStateOf<HydraGameAssets?>(null) }
     var repacks by remember { mutableStateOf<List<HydraRepack>>(emptyList()) }
@@ -373,7 +374,11 @@ fun GameDetailsScreen(
                         Icon(Icons.Default.Download, contentDescription = null)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("BAIXAR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(if (isResolvingLink) "PROCESSANDO..." else "BAIXAR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                if (isResolvingLink) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
                 }
 
                 // Info Cards
@@ -615,7 +620,8 @@ fun GameDetailsScreen(
                         subtitle = "${repackerName(repack)} • ${repack.fileSize ?: "Desconhecido"}${if (repack.uploadDate != null) " • ${repack.uploadDate}" else ""}",
                         uris = repack.uris ?: emptyList(),
                         navController = navController,
-                        mainActivity = mainActivity
+                        mainActivity = mainActivity,
+                        onLoading = { isResolvingLink = it }
                     )
                 }
 
@@ -626,7 +632,8 @@ fun GameDetailsScreen(
                         subtitle = "Fonte: ${repack.sourceName}${if (repack.fileSize != null) " • ${repack.fileSize}" else ""}",
                         uris = repack.uris,
                         navController = navController,
-                        mainActivity = mainActivity
+                        mainActivity = mainActivity,
+                        onLoading = { isResolvingLink = it }
                     )
                 }
 
@@ -638,7 +645,8 @@ fun GameDetailsScreen(
                             subtitle = uri,
                             uris = listOf(uri),
                             navController = navController,
-                            mainActivity = mainActivity
+                            mainActivity = mainActivity,
+                            onLoading = { isResolvingLink = it }
                         )
                     }
                 }
@@ -678,7 +686,7 @@ fun getHostFromUrl(url: String): String? {
 }
 
 @Composable
-fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController, mainActivity: MainActivity) {
+fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController, mainActivity: MainActivity, onLoading: (Boolean) -> Unit) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
     ) {
@@ -691,7 +699,7 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
                     onClick = {
                         val isSupportedByScript = isUrlSupportedByScript(uri)
                         if (Settings.useDownloadScripts && isSupportedByScript) {
-                            triggerAria2Download(uri, mainActivity, title)
+                            triggerAria2Download(uri, mainActivity, title, onLoading = onLoading)
                         } else {
                             val encodedUrl = URLEncoder.encode(uri, "UTF-8")
                             navController.navigate("browser/$encodedUrl")
@@ -711,16 +719,16 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
 }
 
 fun isUrlSupportedByScript(url: String): Boolean {
-    return url.contains("gofile.io") ||
-           url.contains("buzzheavier.com") ||
-           url.contains("bzzhr.co") ||
-           url.contains("pixeldrain.com") ||
-           url.contains("mediafire.com") ||
-           url.contains("datanodes.to") ||
-           url.contains("fuckingfast.co")
+    return (url.contains("gofile.io") && Settings.useGofileScript) ||
+           ((url.contains("buzzheavier.com") || url.contains("bzzhr.co")) && Settings.useBuzzheavierScript) ||
+           (url.contains("pixeldrain.com") && Settings.usePixeldrainScript) ||
+           (url.contains("mediafire.com") && Settings.useMediafireScript) ||
+           (url.contains("datanodes.to") && Settings.useDatanodesScript) ||
+           (url.contains("fuckingfast.co") && Settings.useFuckingfastScript)
 }
 
-fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
+
+fun triggerAria2Download(url: String, activity: MainActivity, title: String, onLoading: (Boolean) -> Unit = {}) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
     if (activeDownloads.none { it.id == downloadId }) {
@@ -729,54 +737,54 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
+            onLoading(true)
             var finalUrl = url
             var header: String? = null
             var resolutionFailed = false
 
-            if (Settings.useDownloadScripts) {
-                if (url.contains("gofile.io")) {
-                    withContext(Dispatchers.IO) {
-                        val id = url.trimEnd('/').split("/").lastOrNull()?.split("?")?.firstOrNull()
-                        if (id != null) {
-                            val token = GofileApi.authorize()
-                            if (token != null) {
-                                val directLink = GofileApi.getDownloadLink(id, token)
-                                if (directLink != null) {
-                                    finalUrl = directLink
-                                    header = "Cookie: accountToken=$token"
-                                } else { resolutionFailed = true }
+            if (url.contains("gofile.io") && Settings.useGofileScript) {
+                withContext(Dispatchers.IO) {
+                    val id = url.trimEnd('/').split("/").lastOrNull()?.split("?")?.firstOrNull()
+                    if (id != null) {
+                        val token = GofileApi.authorize()
+                        if (token != null) {
+                            val directLink = GofileApi.getDownloadLink(id, token)
+                            if (directLink != null) {
+                                finalUrl = directLink
+                                header = "Cookie: accountToken=$token"
                             } else { resolutionFailed = true }
                         } else { resolutionFailed = true }
-                    }
-                } else if (url.contains("buzzheavier.com") || url.contains("bzzhr.co")) {
-                    withContext(Dispatchers.IO) {
-                        val directLink = BuzzHeavierApi.getDirectLink(url)
-                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
-                    }
-                } else if (url.contains("pixeldrain.com")) {
-                    withContext(Dispatchers.IO) {
-                        val directLink = PixelDrainApi.unlock(url)
-                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
-                    }
-                } else if (url.contains("mediafire.com")) {
-                    withContext(Dispatchers.IO) {
-                        val directLink = MediafireApi.getDownloadUrl(url)
-                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
-                    }
-                } else if (url.contains("datanodes.to")) {
-                    withContext(Dispatchers.IO) {
-                        val directLink = DatanodesApi.getDownloadUrl(url)
-                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
-                    }
-                } else if (url.contains("fuckingfast.co")) {
-                    withContext(Dispatchers.IO) {
-                        val directLink = FuckingFastApi.getDirectLink(url)
-                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
-                    }
+                    } else { resolutionFailed = true }
+                }
+            } else if ((url.contains("buzzheavier.com") || url.contains("bzzhr.co")) && Settings.useBuzzheavierScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = BuzzHeavierApi.getDirectLink(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("pixeldrain.com") && Settings.usePixeldrainScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = PixelDrainApi.unlock(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("mediafire.com") && Settings.useMediafireScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = MediafireApi.getDownloadUrl(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("datanodes.to") && Settings.useDatanodesScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = DatanodesApi.getDownloadUrl(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("fuckingfast.co") && Settings.useFuckingfastScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = FuckingFastApi.getDirectLink(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
                 }
             }
 
             if (resolutionFailed) {
+                onLoading(false)
                 android.widget.Toast.makeText(activity, "Erro ao processar link automático. Tente pelo navegador.", android.widget.Toast.LENGTH_LONG).show()
                 val index = activeDownloads.indexOfFirst { it.id == downloadId }
                 if (index != -1) { activeDownloads.removeAt(index) }
@@ -839,30 +847,37 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                                 if (index != -1) {
                                     activeDownloads[index] = activeDownloads[index].copy(gid = gid)
                                 }
+                                onLoading(false)
                                 android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()
                             }
                         } else {
-                            startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                            onLoading(false)
+                            startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header)
                         }
                     }
                 } catch (e: Exception) {
-                    startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                    onLoading(false)
+                    startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header)
                 }
             }
         } catch (e: Exception) {
+            onLoading(false)
+            android.widget.Toast.makeText(activity, "Erro inesperado: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
             e.printStackTrace()
         }
     }
 }
 
-private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String) {
+private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String, header: String? = null) {
     activity.lifecycleScope.launch(Dispatchers.Main) {
         val maxConn = Settings.aria2MaxConnections
+
+        val headerArg = if (header != null) " --header=\"$header\"" else ""
 
         // Run as standalone download in terminal to avoid port conflicts with daemon
         val aria2Cmd = "aria2c --dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
                 "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --check-certificate=false " +
-                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId \"$url\""
+                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId$headerArg \"$url\""
 
         val initialArgs = listOf("sh", "-c", aria2Cmd)
 

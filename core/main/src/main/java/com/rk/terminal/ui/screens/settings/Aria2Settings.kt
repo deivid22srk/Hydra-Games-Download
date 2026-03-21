@@ -28,6 +28,12 @@ fun Aria2Settings(navController: NavController) {
     var maxDownloadLimit by remember { mutableStateOf(Settings.aria2MaxDownloadLimit) }
     var continueDownload by remember { mutableStateOf(Settings.aria2ContinueDownload) }
     var useDownloadScripts by remember { mutableStateOf(Settings.useDownloadScripts) }
+    var useGofileScript by remember { mutableStateOf(Settings.useGofileScript) }
+    var useBuzzheavierScript by remember { mutableStateOf(Settings.useBuzzheavierScript) }
+    var usePixeldrainScript by remember { mutableStateOf(Settings.usePixeldrainScript) }
+    var useMediafireScript by remember { mutableStateOf(Settings.useMediafireScript) }
+    var useDatanodesScript by remember { mutableStateOf(Settings.useDatanodesScript) }
+    var useFuckingfastScript by remember { mutableStateOf(Settings.useFuckingfastScript) }
     var autoSaveInterval by remember { mutableStateOf(Settings.aria2AutoSaveInterval.toString()) }
 
     PreferenceLayout(label = "Configurações Aria2") {
@@ -177,5 +183,46 @@ fun Aria2Settings(navController: NavController) {
                 )
             }
         }
+
+        if (useDownloadScripts) {
+            PreferenceGroup(heading = "Scripts Específicos") {
+                ScriptToggle("GoFile", useGofileScript) {
+                    useGofileScript = it
+                    Settings.useGofileScript = it
+                }
+                ScriptToggle("BuzzHeavier", useBuzzheavierScript) {
+                    useBuzzheavierScript = it
+                    Settings.useBuzzheavierScript = it
+                }
+                ScriptToggle("PixelDrain", usePixeldrainScript) {
+                    usePixeldrainScript = it
+                    Settings.usePixeldrainScript = it
+                }
+                ScriptToggle("MediaFire", useMediafireScript) {
+                    useMediafireScript = it
+                    Settings.useMediafireScript = it
+                }
+                ScriptToggle("DataNodes", useDatanodesScript) {
+                    useDatanodesScript = it
+                    Settings.useDatanodesScript = it
+                }
+                ScriptToggle("FuckingFast", useFuckingfastScript) {
+                    useFuckingfastScript = it
+                    Settings.useFuckingfastScript = it
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScriptToggle(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
