@@ -1,5 +1,6 @@
 package com.rk.terminal.ui.screens.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,7 +32,8 @@ data class DownloadProgress(
     val speed: String = "",
     val totalSize: String = "",
     val isCompleted: Boolean = false,
-    val isPaused: Boolean = false
+    val isPaused: Boolean = false,
+    val filePath: String? = null
 )
 
 val activeDownloads = mutableStateListOf<DownloadProgress>()
@@ -40,6 +42,8 @@ val activeDownloads = mutableStateListOf<DownloadProgress>()
 @Composable
 fun DownloadsScreen() {
     val scope = rememberCoroutineScope()
+    var showDeleteDialog by remember { mutableStateOf<DownloadProgress?>(null) }
+    var deleteFilesFromStorage by remember { mutableStateOf(false) }
 
     // Polling Aria2 status
     LaunchedEffect(Unit) {
@@ -115,18 +119,14 @@ fun DownloadsScreen() {
                                         Icon(if (download.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null)
                                     }
                                     IconButton(onClick = {
-                                        removeDownload(download.gid)
-                                        activeDownloads.removeIf { it.id == download.id }
+                                        showDeleteDialog = download
                                     }) {
                                         Icon(Icons.Default.Delete, contentDescription = null)
                                     }
                                 }
                             } else if (download.isCompleted || download.gid == null) {
                                 IconButton(onClick = {
-                                    if (download.gid != null) {
-                                        removeDownloadResult(download.gid)
-                                    }
-                                    activeDownloads.removeIf { it.id == download.id }
+                                    showDeleteDialog = download
                                 }) {
                                     Icon(Icons.Default.Close, contentDescription = null)
                                 }
@@ -172,6 +172,67 @@ fun DownloadsScreen() {
                 }
             }
         }
+    }
+
+    if (showDeleteDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = null },
+            title = { Text("Excluir Download") },
+            text = {
+                Column {
+                    Text("Deseja realmente excluir '${showDeleteDialog?.title}'?")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { deleteFilesFromStorage = !deleteFilesFromStorage }
+                    ) {
+                        Checkbox(
+                            checked = deleteFilesFromStorage,
+                            onCheckedChange = { deleteFilesFromStorage = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Excluir arquivos do armazenamento")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val download = showDeleteDialog!!
+                        if (download.gid != null) {
+                            if (download.isCompleted) {
+                                removeDownloadResult(download.gid)
+                            } else {
+                                removeDownload(download.gid)
+                            }
+                        }
+
+                        if (deleteFilesFromStorage && download.filePath != null) {
+                            val file = java.io.File(download.filePath)
+                            if (file.exists()) {
+                                if (file.isDirectory) {
+                                    file.deleteRecursively()
+                                } else {
+                                    file.delete()
+                                }
+                            }
+                        }
+
+                        activeDownloads.removeIf { it.id == download.id }
+                        showDeleteDialog = null
+                        deleteFilesFromStorage = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("EXCLUIR")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = null }) {
+                    Text("CANCELAR")
+                }
+            }
+        )
     }
 }
 
@@ -239,6 +300,7 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
 
             val files = res["files"] as? List<Map<String, Any>>
             val fileInfo = files?.firstOrNull()
+            val fullPath = fileInfo?.get("path") as? String
             val fileName = fileInfo?.let {
                 val path = it["path"] as? String
                 if (path.isNullOrEmpty()) {
@@ -273,7 +335,8 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
                     speed = speedStr,
                     totalSize = sizeStr,
                     isPaused = isPaused,
-                    isCompleted = isCompleted
+                    isCompleted = isCompleted,
+                    filePath = fullPath
                 )
             } else {
                 // Persistent: items found in Aria2 but not in our list (e.g. after restart)
@@ -287,7 +350,8 @@ private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
                         speed = speedStr,
                         totalSize = sizeStr,
                         isPaused = isPaused,
-                        isCompleted = isCompleted
+                        isCompleted = isCompleted,
+                        filePath = fullPath
                     )
                 )
             }

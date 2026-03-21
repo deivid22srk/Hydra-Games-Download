@@ -5,12 +5,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LibraryAdd
+import androidx.compose.material.icons.filled.LibraryAddCheck
 import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +32,7 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.screens.terminal.TerminalBackEnd
@@ -72,8 +82,12 @@ fun GameDetailsScreen(
     var repacks by remember { mutableStateOf<List<HydraRepack>>(emptyList()) }
     var localRepacks by remember { mutableStateOf<List<LocalRepack>>(emptyList()) }
     var steamDetails by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var hydraReviews by remember { mutableStateOf<List<HydraReview>>(emptyList()) }
     var showDownloadDialog by remember { mutableStateOf(false) }
     var isSearchingSources by remember { mutableStateOf(false) }
+    var isDescriptionExpanded by remember { mutableStateOf(false) }
+    var isAddingToLibrary by remember { mutableStateOf(false) }
+    var isAlreadyInLibrary by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -153,6 +167,31 @@ fun GameDetailsScreen(
                     }
                     localRepacks = localResults
 
+                    // Check if already in library
+                    val userId = Settings.userId
+                    if (userId.isNotBlank()) {
+                        val libUrl = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library"
+                        client.newCall(Request.Builder().url(libUrl).build()).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string()
+                                val data = gson.fromJson<Map<String, Any>>(body, object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type)
+                                val libraryList = data["library"] as? List<Map<String, Any>>
+                                isAlreadyInLibrary = libraryList?.any {
+                                    it["objectId"] == gameObjectId && it["shop"] == gameShop
+                                } ?: false
+                            }
+                        }
+                    }
+
+                    // Hydra Reviews
+                    val reviewsUrl = "$baseUrl/reviews?take=5&skip=0&sortBy=newest"
+                    client.newCall(Request.Builder().url(reviewsUrl).build()).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val reviewsResp = gson.fromJson(response.body?.string(), HydraReviewsResponse::class.java)
+                            hydraReviews = reviewsResp.reviews ?: emptyList()
+                        }
+                    }
+
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
@@ -210,6 +249,41 @@ fun GameDetailsScreen(
         }
     }
 
+    val addToLibrary = {
+        if (!isAddingToLibrary && gameObjectId != null && gameShop != null) {
+            isAddingToLibrary = true
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val client = HydraApi.getClient()
+                    val gson = Gson()
+                    val body = mapOf(
+                        "objectId" to gameObjectId,
+                        "shop" to gameShop,
+                        "playTimeInMilliseconds" to 0
+                    )
+                    val request = Request.Builder()
+                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
+                        .post(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        withContext(Dispatchers.Main) {
+                            if (response.isSuccessful) {
+                                android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(mainActivity, "Erro ao adicionar.", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    withContext(Dispatchers.Main) { isAddingToLibrary = false }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -219,10 +293,29 @@ fun GameDetailsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
+                actions = {
+                    if (Settings.userId.isNotBlank()) {
+                        IconButton(
+                            onClick = { if (!isAlreadyInLibrary) addToLibrary() },
+                            enabled = !isAddingToLibrary
+                        ) {
+                            if (isAddingToLibrary) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(
+                                    imageVector = if (isAlreadyInLibrary) Icons.Default.LibraryAddCheck else Icons.Default.LibraryAdd,
+                                    contentDescription = if (isAlreadyInLibrary) "Na Biblioteca" else "Adicionar à Biblioteca",
+                                    tint = if (isAlreadyInLibrary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
@@ -309,25 +402,119 @@ fun GameDetailsScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Genres & Categories
+                val genres = (steamDetails?.get("genres") as? List<Map<String, Any>>)?.mapNotNull { it["description"] as? String }
+                val categories = (steamDetails?.get("categories") as? List<Map<String, Any>>)?.mapNotNull { it["description"] as? String }
+
+                if (!genres.isNullOrEmpty() || !categories.isNullOrEmpty()) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        genres?.forEach { genre ->
+                            SuggestionChip(onClick = {}, label = { Text(genre, style = MaterialTheme.typography.labelSmall) })
+                        }
+                        categories?.forEach { category ->
+                            SuggestionChip(
+                                onClick = {},
+                                label = { Text(category, style = MaterialTheme.typography.labelSmall) },
+                                colors = SuggestionChipDefaults.suggestionChipColors(labelColor = MaterialTheme.colorScheme.secondary)
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Description
-                Text("Sobre o Jogo", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                val descriptionHtml = steamDetails?.get("detailed_description") as? String ?: "Sem descrição disponível."
-                AndroidView(
-                    factory = { context ->
-                        TextView(context).apply {
-                            setTextColor(0xFFFFFFFF.toInt()) // Workaround for dark theme
-                            textSize = 14f
-                        }
-                    },
-                    update = { view ->
-                        view.text = HtmlCompat.fromHtml(descriptionHtml, HtmlCompat.FROM_HTML_MODE_LEGACY)
-                    }
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Sobre o Jogo", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val descriptionHtml = steamDetails?.get("detailed_description") as? String ?: "Sem descrição disponível."
 
-                Spacer(modifier = Modifier.height(32.dp))
+                        Box(modifier = Modifier.animateContentSize()) {
+                            AndroidView(
+                                factory = { context ->
+                                    TextView(context).apply {
+                                        setTextColor(0xFFFFFFFF.toInt())
+                                        textSize = 14f
+                                        if (!isDescriptionExpanded) {
+                                            maxLines = 10
+                                            ellipsize = android.text.TextUtils.TruncateAt.END
+                                        }
+                                    }
+                                },
+                                update = { view ->
+                                    view.text = HtmlCompat.fromHtml(descriptionHtml, HtmlCompat.FROM_HTML_MODE_LEGACY)
+                                    view.maxLines = if (isDescriptionExpanded) Integer.MAX_VALUE else 10
+                                }
+                            )
+                        }
+
+                        if (descriptionHtml.length > 500) {
+                            TextButton(
+                                onClick = { isDescriptionExpanded = !isDescriptionExpanded },
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            ) {
+                                Icon(if (isDescriptionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = null)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (isDescriptionExpanded) "VER MENOS" else "VER MAIS")
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Reviews Section
+                if (hydraReviews.isNotEmpty()) {
+                    Text("Avaliações da Comunidade", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    hydraReviews.forEach { review ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AsyncImage(
+                                        model = review.user?.profileImageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(32.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(review.user?.displayName ?: "Usuário Hydra", style = MaterialTheme.typography.labelLarge)
+                                        Row {
+                                            repeat(5) { index ->
+                                                Icon(
+                                                    imageVector = if (index < (review.score ?: 0)) Icons.Default.Star else Icons.Default.StarBorder,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp),
+                                                    tint = Color(0xFFFFD700)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                AndroidView(
+                                    factory = { context -> TextView(context).apply { textSize = 13f; setTextColor(0xFFEEEEEE.toInt()) } },
+                                    update = { view -> view.text = HtmlCompat.fromHtml(review.reviewHtml ?: "", HtmlCompat.FROM_HTML_MODE_LEGACY) }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
 
                 // Media Gallery
                 val screenshots = steamDetails?.get("screenshots") as? List<Map<String, Any>>
@@ -424,7 +611,7 @@ fun GameDetailsScreen(
                 repacks.forEach { repack ->
                     DownloadOptionItem(
                         title = repack.title ?: "Sem título",
-                        subtitle = "${repackerName(repack)} • ${repack.fileSize ?: "Desconhecido"}",
+                        subtitle = "${repackerName(repack)} • ${repack.fileSize ?: "Desconhecido"}${if (repack.uploadDate != null) " • ${repack.uploadDate}" else ""}",
                         uris = repack.uris ?: emptyList(),
                         navController = navController
                     )

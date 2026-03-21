@@ -11,12 +11,24 @@ import okhttp3.Response
 
 object HydraApi {
     private val client = OkHttpClient.Builder()
+        .addInterceptor(UserAgentInterceptor())
         .addInterceptor(AuthInterceptor())
         .build()
 
-    private val baseClient = OkHttpClient()
+    private val baseClient = OkHttpClient.Builder()
+        .addInterceptor(UserAgentInterceptor())
+        .build()
 
     fun getClient(): OkHttpClient = client
+
+    private class UserAgentInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request().newBuilder()
+                .header("User-Agent", "Hydra Launcher Android")
+                .build()
+            return chain.proceed(request)
+        }
+    }
 
     private class AuthInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {

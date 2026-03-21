@@ -16,9 +16,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,21 +37,41 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import com.rk.terminal.ui.routes.MainActivityRoutes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavController, userId: String? = null) {
+fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
+    val userId = if (userIdArg.isNullOrBlank()) null else userIdArg
     val context = LocalContext.current
-    var profile by remember { mutableStateOf<HydraProfile?>(null) }
+    val clipboardManager = LocalClipboardManager.current
+
+    val isMe = userId == null || (Settings.userId.isNotBlank() && userId == Settings.userId)
+
+    var profile by remember {
+        mutableStateOf<HydraProfile?>(
+            if (isMe && Settings.userDisplayName.isNotBlank()) {
+                HydraProfile(
+                    id = Settings.userId,
+                    displayName = Settings.userDisplayName,
+                    profileImageUrl = Settings.userProfileImageUrl,
+                    backgroundImageUrl = Settings.userBackgroundImageUrl,
+                    bio = Settings.userBio
+                )
+            } else null
+        )
+    }
     var globalBadges by remember { mutableStateOf<List<HydraBadge>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isEditing by remember { mutableStateOf(false) }
@@ -74,7 +97,6 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
         }
     }
     
-    val isMe = userId == null || userId == Settings.userId || (profile != null && profile?.id == Settings.userId)
 
     val profileImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageUpload(it, true, context, scope) { profile = it } }
@@ -112,8 +134,8 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                         val body = response.body?.string()
                         val newProfile = gson.fromJson(body, HydraProfile::class.java)
                         profile = newProfile
-                        if (userId == null && newProfile.id != null) {
-                            Settings.userId = newProfile.id
+                        if (isMe) {
+                            Settings.updateFromProfile(newProfile)
                         }
                     } else if (response.code == 401) {
                         // Token might be invalid
@@ -232,7 +254,7 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isMe) "Meu Perfil" else profile?.displayName ?: "Perfil") },
+                title = { Text(if (isMe) "Meu Perfil" else profile?.displayName ?: "Perfil", fontWeight = FontWeight.ExtraBold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -266,7 +288,11 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                             }
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         }
     ) { padding ->
@@ -274,26 +300,39 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isLoggedIn) {
                 if (isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    Box(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                    Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
                         AsyncImage(
                             model = profile?.backgroundImageUrl,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                            contentScale = ContentScale.Crop,
+                            alpha = 0.7f
                         )
+
+                        // Gradient Scrim for better text readability and look
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                                        startY = 100f
+                                    )
+                                )
+                        )
+
                         if (isEditing) {
-                            IconButton(
+                            FilledTonalIconButton(
                                 onClick = { backgroundImageLauncher.launch("image/*") },
-                                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                             ) {
                                 Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Fundo")
                             }
@@ -301,25 +340,25 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
 
                         Surface(
                             modifier = Modifier
-                                .size(80.dp)
-                                .align(Alignment.BottomCenter)
-                                .offset(y = 40.dp),
-                            shape = MaterialTheme.shapes.extraLarge,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            tonalElevation = 4.dp
+                                .size(110.dp)
+                                .align(Alignment.BottomCenter),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            border = androidx.compose.foundation.BorderStroke(4.dp, MaterialTheme.colorScheme.surface),
+                            tonalElevation = 16.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 AsyncImage(
                                     model = profile?.profileImageUrl,
                                     contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
                                 if (isEditing) {
                                     IconButton(
                                         onClick = { profileImageLauncher.launch("image/*") },
                                         modifier = Modifier.fillMaxSize(),
-                                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.3f))
+                                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.4f))
                                     ) {
                                         Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Foto", tint = Color.White)
                                     }
@@ -328,7 +367,7 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (isEditing) {
                         OutlinedTextField(
@@ -352,13 +391,47 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                             fontWeight = FontWeight.Bold
                         )
 
+                        profile?.id?.let { id ->
+                            Surface(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(id))
+                                    android.widget.Toast.makeText(context, "ID copiado!", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = id,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.sp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copiar ID",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
                             text = profile?.bio ?: "Nenhuma biografia disponível.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp)
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -369,94 +442,133 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text("${stats.unlockedAchievementSum ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Conquistas", style = MaterialTheme.typography.labelSmall)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text(formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Tempo total", style = MaterialTheme.typography.labelSmall)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text("${profile?.karma ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Karma", style = MaterialTheme.typography.labelSmall)
-                                }
+                                StatCard(
+                                    icon = Icons.Default.EmojiEvents,
+                                    value = "${stats.unlockedAchievementSum ?: 0}",
+                                    label = "Conquistas"
+                                )
+                                StatCard(
+                                    icon = Icons.Default.History,
+                                    value = formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L),
+                                    label = "Tempo total"
+                                )
+                                StatCard(
+                                    icon = Icons.Default.Star,
+                                    value = "${profile?.karma ?: 0}",
+                                    label = "Karma"
+                                )
+                            }
+                        }
+
+                        // Library Quick Access
+                        if (isMe) {
+                            Button(
+                                onClick = { navController.navigate(MainActivityRoutes.Library.route) },
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                            ) {
+                                Icon(Icons.Default.LibraryBooks, contentDescription = null)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("MINHA BIBLIOTECA", fontWeight = FontWeight.Bold)
                             }
                         }
 
                         // Recent Games Section
                         if (!profile?.recentGames.isNullOrEmpty()) {
-                            Text(
-                                text = "Jogos Recentes",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
-                                textAlign = TextAlign.Start
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Atividade Recente",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                TextButton(onClick = { navController.navigate(MainActivityRoutes.Library.route) }) {
+                                    Text("Ver Biblioteca", color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(profile?.recentGames ?: emptyList()) { game ->
-                                    Card(
-                                        modifier = Modifier.width(120.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    ElevatedCard(
+                                        modifier = Modifier.width(140.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
                                             AsyncImage(
                                                 model = game.iconUrl,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(50.dp).clip(MaterialTheme.shapes.small),
+                                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
                                                 contentScale = ContentScale.Crop
                                             )
-                                            Text(game.title ?: "", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(game.title ?: "", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                                         }
                                     }
                                 }
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(24.dp))
+
                         // Badges Section
                         if (!profile?.badges.isNullOrEmpty()) {
                             Text(
                                 text = "Emblemas",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
                                 textAlign = TextAlign.Start
                             )
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 items(profile?.badges ?: emptyList()) { badgeName ->
                                     val badgeDef = globalBadges.find { it.name == badgeName }
                                     if (badgeDef != null) {
-                                        AsyncImage(
-                                            model = badgeDef.badge?.url,
-                                            contentDescription = badgeDef.title,
-                                            modifier = Modifier.size(40.dp)
-                                        )
+                                        Surface(
+                                            modifier = Modifier.size(50.dp),
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            tonalElevation = 2.dp
+                                        ) {
+                                            AsyncImage(
+                                                model = badgeDef.badge?.url,
+                                                contentDescription = badgeDef.title,
+                                                modifier = Modifier.padding(8.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         if (!profile?.friends.isNullOrEmpty()) {
                             Text(
                                 text = "Amigos (${profile?.friends?.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(vertical = 12.dp),
                                 textAlign = TextAlign.Start
                             )
 
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 items(profile?.friends ?: emptyList()) { friend ->
                                     Column(
@@ -488,8 +600,8 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                         }
 
                         if (isMe) {
-                            Spacer(modifier = Modifier.height(32.dp))
-                            Button(
+                            Spacer(modifier = Modifier.height(48.dp))
+                            OutlinedButton(
                                 onClick = {
                                     Settings.accessToken = ""
                                     Settings.refreshToken = ""
@@ -497,13 +609,16 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
                                     Settings.tokenExpiration = 0L
                                     isLoggedIn = false
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(Icons.Default.ExitToApp, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("SAIR DA CONTA")
+                                Text("SAIR DA CONTA", fontWeight = FontWeight.Bold)
                             }
+                            Spacer(modifier = Modifier.height(32.dp))
                         }
                     }
                 }
@@ -596,6 +711,23 @@ fun ProfileScreen(navController: NavController, userId: String? = null) {
     }
 }
 
+@Composable
+fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
+    Card(
+        modifier = Modifier.width(100.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(8.dp).fillMaxWidth()
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+        }
+    }
+}
+
 private fun handleImageUpload(
     uri: Uri,
     isProfileImage: Boolean,
@@ -666,6 +798,9 @@ private fun handleImageUpload(
                     client.newCall(refreshRequest).execute().use { refreshResponse ->
                         if (refreshResponse.isSuccessful) {
                             val newProfile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
+
+                            Settings.updateFromProfile(newProfile)
+
                             withContext(Dispatchers.Main) {
                                 onSuccess(newProfile)
                             }

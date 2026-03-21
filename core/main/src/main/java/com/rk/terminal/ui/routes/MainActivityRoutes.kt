@@ -11,6 +11,7 @@ sealed class MainActivityRoutes(val route: String) {
     data object GameDetails : MainActivityRoutes("game_details/{title}")
     data object Search : MainActivityRoutes("search")
     data object Profile : MainActivityRoutes("profile?userId={userId}")
+    data object Library : MainActivityRoutes("library")
     data object Downloads : MainActivityRoutes("downloads")
     data object Aria2Settings : MainActivityRoutes("aria2_settings")
     data object Browser : MainActivityRoutes("browser/{url}")
