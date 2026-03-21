@@ -21,6 +21,8 @@ data class HydraGame(
     @SerializedName("objectId") val objectId: String? = null,
     @SerializedName("libraryImageUrl") val libraryImageUrl: String? = null,
     @SerializedName("downloadSources") val downloadSources: List<HydraDownloadSource>? = null,
+    @SerializedName("playTimeInSeconds") val playTimeInSeconds: Long? = null,
+    @SerializedName("lastTimePlayed") val lastTimePlayed: String? = null,
     var sourceName: String? = null
 )
 

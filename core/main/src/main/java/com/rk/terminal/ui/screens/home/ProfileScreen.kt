@@ -40,10 +40,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import com.rk.terminal.ui.routes.MainActivityRoutes
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -319,12 +321,13 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         Surface(
                             modifier = Modifier
-                                .size(80.dp)
+                                .size(100.dp)
                                 .align(Alignment.BottomCenter)
-                                .offset(y = 40.dp),
-                            shape = MaterialTheme.shapes.extraLarge,
+                                .offset(y = 50.dp),
+                            shape = CircleShape,
                             color = MaterialTheme.colorScheme.surfaceVariant,
-                            tonalElevation = 4.dp
+                            border = androidx.compose.foundation.BorderStroke(4.dp, MaterialTheme.colorScheme.surface),
+                            tonalElevation = 8.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 AsyncImage(
@@ -346,7 +349,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(56.dp))
 
                     if (isEditing) {
                         OutlinedTextField(
@@ -410,32 +413,53 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text("${stats.unlockedAchievementSum ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Conquistas", style = MaterialTheme.typography.labelSmall)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text(formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Tempo total", style = MaterialTheme.typography.labelSmall)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Text("${profile?.karma ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text("Karma", style = MaterialTheme.typography.labelSmall)
-                                }
+                                StatCard(
+                                    icon = Icons.Default.EmojiEvents,
+                                    value = "${stats.unlockedAchievementSum ?: 0}",
+                                    label = "Conquistas"
+                                )
+                                StatCard(
+                                    icon = Icons.Default.History,
+                                    value = formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L),
+                                    label = "Tempo total"
+                                )
+                                StatCard(
+                                    icon = Icons.Default.Star,
+                                    value = "${profile?.karma ?: 0}",
+                                    label = "Karma"
+                                )
+                            }
+                        }
+
+                        // Library Quick Access
+                        if (isMe) {
+                            OutlinedButton(
+                                onClick = { navController.navigate(MainActivityRoutes.Library.route) },
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.LibraryBooks, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("VER MINHA BIBLIOTECA")
                             }
                         }
 
                         // Recent Games Section
                         if (!profile?.recentGames.isNullOrEmpty()) {
-                            Text(
-                                text = "Jogos Recentes",
-                                style = MaterialTheme.typography.titleMedium,
+                            Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
-                                textAlign = TextAlign.Start
-                            )
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Jogos Recentes",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    textAlign = TextAlign.Start
+                                )
+                                TextButton(onClick = { navController.navigate(MainActivityRoutes.Library.route) }) {
+                                    Text("Ver todos")
+                                }
+                            }
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -634,6 +658,23 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                 TextButton(onClick = { showReportDialog = false }) { Text("Cancelar") }
             }
         )
+    }
+}
+
+@Composable
+fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
+    Card(
+        modifier = Modifier.width(100.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(8.dp).fillMaxWidth()
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
+        }
     }
 }
 
