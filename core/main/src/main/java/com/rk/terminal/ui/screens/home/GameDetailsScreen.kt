@@ -689,7 +689,8 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
             uris.forEach { uri ->
                 Button(
                     onClick = {
-                        if (uri.contains("gofile.io")) {
+                        val isSupportedByScript = uri.contains("gofile.io") || uri.contains("buzzheavier.com") || uri.contains("bzzhr.co")
+                        if (Settings.useDownloadScripts && isSupportedByScript) {
                             triggerAria2Download(uri, mainActivity, title)
                         } else {
                             val encodedUrl = URLEncoder.encode(uri, "UTF-8")
@@ -721,17 +722,26 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
             var finalUrl = url
             var header: String? = null
 
-            if (url.contains("gofile.io")) {
-                withContext(Dispatchers.IO) {
-                    val id = url.split("/").lastOrNull()
-                    if (id != null) {
-                        val token = GofileApi.authorize()
-                        if (token != null) {
-                            val directLink = GofileApi.getDownloadLink(id, token)
-                            if (directLink != null) {
-                                finalUrl = directLink
-                                header = "Cookie: accountToken=$token"
+            if (Settings.useDownloadScripts) {
+                if (url.contains("gofile.io")) {
+                    withContext(Dispatchers.IO) {
+                        val id = url.split("/").lastOrNull()
+                        if (id != null) {
+                            val token = GofileApi.authorize()
+                            if (token != null) {
+                                val directLink = GofileApi.getDownloadLink(id, token)
+                                if (directLink != null) {
+                                    finalUrl = directLink
+                                    header = "Cookie: accountToken=$token"
+                                }
                             }
+                        }
+                    }
+                } else if (url.contains("buzzheavier.com") || url.contains("bzzhr.co")) {
+                    withContext(Dispatchers.IO) {
+                        val directLink = BuzzHeavierApi.getDirectLink(url)
+                        if (directLink != null) {
+                            finalUrl = directLink
                         }
                     }
                 }

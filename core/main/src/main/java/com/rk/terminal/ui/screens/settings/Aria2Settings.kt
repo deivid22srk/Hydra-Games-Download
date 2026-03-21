@@ -27,6 +27,7 @@ fun Aria2Settings(navController: NavController) {
     var minSplitSize by remember { mutableStateOf(Settings.aria2MinSplitSize) }
     var maxDownloadLimit by remember { mutableStateOf(Settings.aria2MaxDownloadLimit) }
     var continueDownload by remember { mutableStateOf(Settings.aria2ContinueDownload) }
+    var useDownloadScripts by remember { mutableStateOf(Settings.useDownloadScripts) }
     var autoSaveInterval by remember { mutableStateOf(Settings.aria2AutoSaveInterval.toString()) }
 
     PreferenceLayout(label = "Configurações Aria2") {
@@ -158,6 +159,20 @@ fun Aria2Settings(navController: NavController) {
                     onCheckedChange = {
                         continueDownload = it
                         Settings.aria2ContinueDownload = it
+                    }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Usar Automação de Downloads")
+                Switch(
+                    checked = useDownloadScripts,
+                    onCheckedChange = {
+                        useDownloadScripts = it
+                        Settings.useDownloadScripts = it
                     }
                 )
             }

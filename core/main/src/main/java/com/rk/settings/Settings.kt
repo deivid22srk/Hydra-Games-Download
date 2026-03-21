@@ -99,6 +99,10 @@ object Settings {
         get() = Preference.getBoolean(key = "shortcuts_enabled", default = true)
         set(value) = Preference.setBoolean(key = "shortcuts_enabled", value)
 
+    var useDownloadScripts
+        get() = Preference.getBoolean(key = "use_download_scripts", default = true)
+        set(value) = Preference.setBoolean(key = "use_download_scripts", value = value)
+
     var hydraSources: List<com.rk.terminal.ui.screens.home.HydraSourceConfig>
         get() {
             val json = Preference.getString(key = "hydra_sources_v2", default = "[]")
