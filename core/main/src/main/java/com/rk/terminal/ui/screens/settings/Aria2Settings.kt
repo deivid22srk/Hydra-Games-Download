@@ -1,12 +1,19 @@
 package com.rk.terminal.ui.screens.settings
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.rk.components.compose.preferences.base.PreferenceGroup
@@ -34,7 +41,13 @@ fun Aria2Settings(navController: NavController) {
     var useMediafireScript by remember { mutableStateOf(Settings.useMediafireScript) }
     var useDatanodesScript by remember { mutableStateOf(Settings.useDatanodesScript) }
     var useFuckingfastScript by remember { mutableStateOf(Settings.useFuckingfastScript) }
+    var fallbackToBrowserOnError by remember { mutableStateOf(Settings.fallbackToBrowserOnError) }
+    var useExternalBrowser by remember { mutableStateOf(Settings.useExternalBrowser) }
+    var selectedBrowserPackage by remember { mutableStateOf(Settings.selectedExternalBrowserPackage) }
     var autoSaveInterval by remember { mutableStateOf(Settings.aria2AutoSaveInterval.toString()) }
+
+    var showBrowserDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     PreferenceLayout(label = "Configurações Aria2") {
         PreferenceGroup(heading = "RPC") {
@@ -184,6 +197,53 @@ fun Aria2Settings(navController: NavController) {
             }
         }
 
+        PreferenceGroup(heading = "Navegador e Fallback") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Fallback para Navegador em caso de erro")
+                Switch(
+                    checked = fallbackToBrowserOnError,
+                    onCheckedChange = {
+                        fallbackToBrowserOnError = it
+                        Settings.fallbackToBrowserOnError = it
+                    }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Usar Navegador Externo")
+                Switch(
+                    checked = useExternalBrowser,
+                    onCheckedChange = {
+                        useExternalBrowser = it
+                        Settings.useExternalBrowser = it
+                    }
+                )
+            }
+
+            if (useExternalBrowser) {
+                val pm = context.packageManager
+                val browserName = try {
+                    if (selectedBrowserPackage.isBlank()) "Nenhum selecionado"
+                    else pm.getApplicationLabel(pm.getApplicationInfo(selectedBrowserPackage, 0)).toString()
+                } catch (e: Exception) { "Desconhecido" }
+
+                ListItem(
+                    headlineContent = { Text("Selecionar Navegador Externo") },
+                    supportingContent = { Text(browserName) },
+                    leadingContent = { Icon(Icons.Default.Language, contentDescription = null) },
+                    modifier = Modifier.clickable { showBrowserDialog = true }
+                )
+            }
+        }
+
         if (useDownloadScripts) {
             PreferenceGroup(heading = "Scripts Específicos") {
                 ScriptToggle("GoFile", useGofileScript) {
@@ -212,6 +272,38 @@ fun Aria2Settings(navController: NavController) {
                 }
             }
         }
+    }
+
+    if (showBrowserDialog) {
+        val browsers = remember {
+            val pm = context.packageManager
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL).map { it.activityInfo }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showBrowserDialog = false },
+            title = { Text("Escolha o Navegador") },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(browsers) { browser ->
+                        val label = browser.loadLabel(context.packageManager).toString()
+                        ListItem(
+                            headlineContent = { Text(label) },
+                            supportingContent = { Text(browser.packageName) },
+                            modifier = Modifier.clickable {
+                                selectedBrowserPackage = browser.packageName
+                                Settings.selectedExternalBrowserPackage = browser.packageName
+                                showBrowserDialog = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBrowserDialog = false }) { Text("Fechar") }
+            }
+        )
     }
 }
 

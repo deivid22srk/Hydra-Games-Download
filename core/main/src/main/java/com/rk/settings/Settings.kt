@@ -127,6 +127,18 @@ object Settings {
         get() = Preference.getBoolean(key = "use_fuckingfast_script", default = true)
         set(value) = Preference.setBoolean(key = "use_fuckingfast_script", value = value)
 
+    var fallbackToBrowserOnError
+        get() = Preference.getBoolean(key = "fallback_to_browser_on_error", default = true)
+        set(value) = Preference.setBoolean(key = "fallback_to_browser_on_error", value = value)
+
+    var useExternalBrowser
+        get() = Preference.getBoolean(key = "use_external_browser", default = false)
+        set(value) = Preference.setBoolean(key = "use_external_browser", value = value)
+
+    var selectedExternalBrowserPackage
+        get() = Preference.getString(key = "selected_external_browser_pkg", default = "")
+        set(value) = Preference.setString(key = "selected_external_browser_pkg", value = value)
+
     var hydraSources: List<com.rk.terminal.ui.screens.home.HydraSourceConfig>
         get() {
             val json = Preference.getString(key = "hydra_sources_v2", default = "[]")

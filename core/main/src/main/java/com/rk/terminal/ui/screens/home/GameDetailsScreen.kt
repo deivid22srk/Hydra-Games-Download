@@ -51,6 +51,8 @@ import androidx.lifecycle.lifecycleScope
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.settings.WorkingMode
 import java.security.MessageDigest
+import android.content.Intent
+import android.net.Uri
 
 fun generateGid(url: String): String {
     val md = MessageDigest.getInstance("MD5")
@@ -699,10 +701,9 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
                     onClick = {
                         val isSupportedByScript = isUrlSupportedByScript(uri)
                         if (Settings.useDownloadScripts && isSupportedByScript) {
-                            triggerAria2Download(uri, mainActivity, title, onLoading = onLoading)
+                            triggerAria2Download(uri, mainActivity, title, navController = navController, onLoading = onLoading)
                         } else {
-                            val encodedUrl = URLEncoder.encode(uri, "UTF-8")
-                            navController.navigate("browser/$encodedUrl")
+                            openBrowser(uri, mainActivity, navController)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -728,7 +729,25 @@ fun isUrlSupportedByScript(url: String): Boolean {
 }
 
 
-fun triggerAria2Download(url: String, activity: MainActivity, title: String, onLoading: (Boolean) -> Unit = {}) {
+fun openBrowser(url: String, activity: MainActivity, navController: NavController) {
+    if (Settings.useExternalBrowser && Settings.selectedExternalBrowserPackage.isNotBlank()) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.setPackage(Settings.selectedExternalBrowserPackage)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val encodedUrl = URLEncoder.encode(url, "UTF-8")
+            navController.navigate("browser/$encodedUrl")
+        }
+    } else {
+        val encodedUrl = URLEncoder.encode(url, "UTF-8")
+        navController.navigate("browser/$encodedUrl")
+    }
+}
+
+fun triggerAria2Download(url: String, activity: MainActivity, title: String, navController: NavController? = null, onLoading: (Boolean) -> Unit = {}) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
     if (activeDownloads.none { it.id == downloadId }) {
@@ -785,9 +804,15 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, onL
 
             if (resolutionFailed) {
                 onLoading(false)
-                android.widget.Toast.makeText(activity, "Erro ao processar link automático. Tente pelo navegador.", android.widget.Toast.LENGTH_LONG).show()
                 val index = activeDownloads.indexOfFirst { it.id == downloadId }
                 if (index != -1) { activeDownloads.removeAt(index) }
+
+                if (Settings.fallbackToBrowserOnError && navController != null) {
+                    android.widget.Toast.makeText(activity, "Falha na automação. Abrindo navegador...", android.widget.Toast.LENGTH_SHORT).show()
+                    openBrowser(url, activity, navController)
+                } else {
+                    android.widget.Toast.makeText(activity, "Erro ao processar link automático. Tente pelo navegador.", android.widget.Toast.LENGTH_LONG).show()
+                }
                 return@launch
             }
 
