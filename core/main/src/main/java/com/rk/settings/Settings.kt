@@ -138,6 +138,38 @@ object Settings {
         get() = Preference.getString(key = "aria2_user_agent", default = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         set(value) = Preference.setString(key = "aria2_user_agent", value = value)
 
+    var aria2MaxTries: Int
+        get() = Preference.getInt(key = "aria2_max_tries", default = 10)
+        set(value) = Preference.setInt(key = "aria2_max_tries", value = value)
+
+    var aria2RetryWait: Int
+        get() = Preference.getInt(key = "aria2_retry_wait", default = 5)
+        set(value) = Preference.setInt(key = "aria2_retry_wait", value = value)
+
+    var aria2Timeout: Int
+        get() = Preference.getInt(key = "aria2_timeout", default = 60)
+        set(value) = Preference.setInt(key = "aria2_timeout", value = value)
+
+    var aria2FileAllocation: String
+        get() = Preference.getString(key = "aria2_file_allocation", default = "none")
+        set(value) = Preference.setString(key = "aria2_file_allocation", value = value)
+
+    var aria2MinSplitSize: String
+        get() = Preference.getString(key = "aria2_min_split_size", default = "20M")
+        set(value) = Preference.setString(key = "aria2_min_split_size", value = value)
+
+    var aria2MaxDownloadLimit: String
+        get() = Preference.getString(key = "aria2_max_download_limit", default = "0")
+        set(value) = Preference.setString(key = "aria2_max_download_limit", value = value)
+
+    var aria2ContinueDownload: Boolean
+        get() = Preference.getBoolean(key = "aria2_continue_download", default = true)
+        set(value) = Preference.setBoolean(key = "aria2_continue_download", value = value)
+
+    var aria2AutoSaveInterval: Int
+        get() = Preference.getInt(key = "aria2_auto_save_interval", default = 60)
+        set(value) = Preference.setInt(key = "aria2_auto_save_interval", value = value)
+
     var isExtraSetupComplete: Boolean
         get() = Preference.getBoolean(key = "is_extra_setup_complete", default = false)
         set(value) = Preference.setBoolean(key = "is_extra_setup_complete", value = value)

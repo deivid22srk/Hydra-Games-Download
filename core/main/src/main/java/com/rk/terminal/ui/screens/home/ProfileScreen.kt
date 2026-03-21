@@ -73,6 +73,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
         )
     }
     var globalBadges by remember { mutableStateOf<List<HydraBadge>>(emptyList()) }
+    var friendRequests by remember { mutableStateOf<HydraFriendRequestsResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isEditing by remember { mutableStateOf(false) }
     var editDisplayName by remember { mutableStateOf("") }
@@ -141,6 +142,18 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         // Token might be invalid
                         withContext(Dispatchers.Main) {
                             isLoggedIn = false
+                        }
+                    }
+                }
+                
+                // Buscar pedidos de amizade se for meu perfil
+                if (isMe) {
+                    val friendRequestsUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests"
+                    val friendRequestsReq = Request.Builder().url(friendRequestsUrl).build()
+                    client.newCall(friendRequestsReq).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string()
+                            friendRequests = gson.fromJson(body, HydraFriendRequestsResponse::class.java)
                         }
                     }
                 }
@@ -555,6 +568,108 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
+
+                        // Pedidos de Amizade Pendentes (apenas para meu perfil)
+                        if (isMe && !friendRequests?.incoming.isNullOrEmpty()) {
+                            Text(
+                                text = "Solicita\u00e7\u00f5es de Amizade (${friendRequests?.incoming?.size})",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
+                                textAlign = TextAlign.Start
+                            )
+                            
+                            friendRequests?.incoming?.forEach { request ->
+                                val requester = request.userA
+                                if (requester != null) {
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                AsyncImage(
+                                                    model = requester.profileImageUrl,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(48.dp).clip(CircleShape),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(
+                                                        text = requester.displayName ?: "Usu\u00e1rio",
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "Pedido de amizade",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                FilledTonalIconButton(
+                                                    onClick = {
+                                                        scope.launch(Dispatchers.IO) {
+                                                            try {
+                                                                val client = HydraApi.getClient()
+                                                                val acceptRequest = Request.Builder()
+                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}/accept")
+                                                                    .patch("".toRequestBody())
+                                                                    .build()
+                                                                client.newCall(acceptRequest).execute().use {
+                                                                    if (it.isSuccessful) {
+                                                                        refreshProfile()
+                                                                    }
+                                                                }
+                                                            } catch (e: Exception) { e.printStackTrace() }
+                                                        }
+                                                    },
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                                                    )
+                                                ) {
+                                                    Icon(Icons.Default.Check, contentDescription = "Aceitar")
+                                                }
+                                                FilledTonalIconButton(
+                                                    onClick = {
+                                                        scope.launch(Dispatchers.IO) {
+                                                            try {
+                                                                val client = HydraApi.getClient()
+                                                                val rejectRequest = Request.Builder()
+                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}/refuse")
+                                                                    .patch("".toRequestBody())
+                                                                    .build()
+                                                                client.newCall(rejectRequest).execute().use {
+                                                                    if (it.isSuccessful) {
+                                                                        refreshProfile()
+                                                                    }
+                                                                }
+                                                            } catch (e: Exception) { e.printStackTrace() }
+                                                        }
+                                                    },
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                                    )
+                                                ) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Recusar")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
 
                         if (!profile?.friends.isNullOrEmpty()) {
                             Text(
