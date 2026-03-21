@@ -173,49 +173,66 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLink(intent: Intent) {
-        val data = intent.data
-        if (data != null && data.scheme == "hydralauncher" && data.host == "auth") {
-            val payload = data.getQueryParameter("payload")
-            if (payload != null) {
-                try {
-                    val decoded = android.util.Base64.decode(payload, android.util.Base64.DEFAULT).decodeToString()
-                    val gson = com.google.gson.Gson()
-                    val authData = gson.fromJson(decoded, Map::class.java)
+        val data = intent.data ?: return
+        if (data.scheme != "hydralauncher") return
 
-                    val accessToken = authData["accessToken"] as? String
-                    val refreshToken = authData["refreshToken"] as? String
-                    val expiresIn = (authData["expiresIn"] as? Double)?.toLong() ?: 0L
-                    val userId = authData["userId"] as? String
+        when (data.host) {
+            "auth" -> {
+                val payload = data.getQueryParameter("payload")
+                if (payload != null) {
+                    try {
+                        val decoded = android.util.Base64.decode(payload, android.util.Base64.DEFAULT).decodeToString()
+                        val gson = com.google.gson.Gson()
+                        val authData = gson.fromJson(decoded, Map::class.java)
 
-                    if (accessToken != null && refreshToken != null) {
-                        Settings.accessToken = accessToken
-                        Settings.refreshToken = refreshToken
-                        Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
-                        if (userId != null) {
-                            Settings.userId = userId
-                        }
+                        val accessToken = authData["accessToken"] as? String
+                        val refreshToken = authData["refreshToken"] as? String
+                        val expiresIn = (authData["expiresIn"] as? Double)?.toLong() ?: 0L
+                        val userId = authData["userId"] as? String
 
-                        // Fetch profile data
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            try {
-                                val client = HydraApi.getClient()
-                                val request = Request.Builder().url("https://hydra-api-us-east-1.losbroxas.org/profile/me").build()
-                                client.newCall(request).execute().use { response ->
-                                    if (response.isSuccessful) {
-                                        val body = response.body?.string()
-                                        val profile = Gson().fromJson(body, HydraProfile::class.java)
-                                        profile?.let { Settings.updateFromProfile(it) }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
+                        if (accessToken != null && refreshToken != null) {
+                            Settings.accessToken = accessToken
+                            Settings.refreshToken = refreshToken
+                            Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
+                            if (userId != null) {
+                                Settings.userId = userId
                             }
-                        }
 
-                        android.widget.Toast.makeText(this, "Login realizado com sucesso!", android.widget.Toast.LENGTH_LONG).show()
+                            // Fetch profile data
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    val client = HydraApi.getClient()
+                                    val request = Request.Builder().url("https://hydra-api-us-east-1.losbroxas.org/profile/me").build()
+                                    client.newCall(request).execute().use { response ->
+                                        if (response.isSuccessful) {
+                                            val body = response.body?.string()
+                                            val profile = Gson().fromJson(body, HydraProfile::class.java)
+                                            profile?.let { Settings.updateFromProfile(it) }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+
+                            android.widget.Toast.makeText(this, "Login realizado com sucesso!", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                }
+            }
+            "install-source" -> {
+                val url = data.getQueryParameter("url")
+                if (url != null) {
+                    val currentSources = Settings.hydraSources.toMutableList()
+                    if (currentSources.none { it.url == url }) {
+                        currentSources.add(com.rk.terminal.ui.screens.home.HydraSourceConfig(url))
+                        Settings.hydraSources = currentSources
+                        android.widget.Toast.makeText(this, "Fonte adicionada: $url", android.widget.Toast.LENGTH_LONG).show()
+                    } else {
+                        android.widget.Toast.makeText(this, "Fonte já existente.", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
