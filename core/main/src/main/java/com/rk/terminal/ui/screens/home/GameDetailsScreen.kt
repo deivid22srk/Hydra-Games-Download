@@ -614,7 +614,8 @@ fun GameDetailsScreen(
                         title = repack.title ?: "Sem título",
                         subtitle = "${repackerName(repack)} • ${repack.fileSize ?: "Desconhecido"}${if (repack.uploadDate != null) " • ${repack.uploadDate}" else ""}",
                         uris = repack.uris ?: emptyList(),
-                        navController = navController
+                        navController = navController,
+                        mainActivity = mainActivity
                     )
                 }
 
@@ -624,7 +625,8 @@ fun GameDetailsScreen(
                         title = repack.title,
                         subtitle = "Fonte: ${repack.sourceName}${if (repack.fileSize != null) " • ${repack.fileSize}" else ""}",
                         uris = repack.uris,
-                        navController = navController
+                        navController = navController,
+                        mainActivity = mainActivity
                     )
                 }
 
@@ -635,7 +637,8 @@ fun GameDetailsScreen(
                             title = "Link Direto",
                             subtitle = uri,
                             uris = listOf(uri),
-                            navController = navController
+                            navController = navController,
+                            mainActivity = mainActivity
                         )
                     }
                 }
@@ -675,7 +678,7 @@ fun getHostFromUrl(url: String): String? {
 }
 
 @Composable
-fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController) {
+fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController, mainActivity: MainActivity) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
     ) {
@@ -686,8 +689,12 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
             uris.forEach { uri ->
                 Button(
                     onClick = {
-                        val encodedUrl = URLEncoder.encode(uri, "UTF-8")
-                        navController.navigate("browser/$encodedUrl")
+                        if (uri.contains("gofile.io")) {
+                            triggerAria2Download(uri, mainActivity, title)
+                        } else {
+                            val encodedUrl = URLEncoder.encode(uri, "UTF-8")
+                            navController.navigate("browser/$encodedUrl")
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 ) {
@@ -711,6 +718,25 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
+            var finalUrl = url
+            var header: String? = null
+
+            if (url.contains("gofile.io")) {
+                withContext(Dispatchers.IO) {
+                    val id = url.split("/").lastOrNull()
+                    if (id != null) {
+                        val token = GofileApi.authorize()
+                        if (token != null) {
+                            val directLink = GofileApi.getDownloadLink(id, token)
+                            if (directLink != null) {
+                                finalUrl = directLink
+                                header = "Cookie: accountToken=$token"
+                            }
+                        }
+                    }
+                }
+            }
+
             val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
             val rpcSecret = Settings.aria2RpcSecret
             val maxConn = Settings.aria2MaxConnections
@@ -722,8 +748,8 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
             if (rpcSecret.isNotBlank()) {
                 params.add("token:$rpcSecret")
             }
-            params.add(listOf(url))
-            params.add(mapOf(
+            params.add(listOf(finalUrl))
+            val options = mutableMapOf(
                 "dir" to downloadPath,
                 "max-connection-per-server" to maxConn.toString(),
                 "split" to maxConn.toString(),
@@ -734,7 +760,11 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                 "retry-wait" to "5",
                 "file-allocation" to "none",
                 "gid" to downloadId
-            ))
+            )
+            if (header != null) {
+                options["header"] = header!!
+            }
+            params.add(options)
 
             val rpcRequestMap = mapOf(
                 "jsonrpc" to "2.0",
