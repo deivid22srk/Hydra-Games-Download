@@ -689,7 +689,7 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
             uris.forEach { uri ->
                 Button(
                     onClick = {
-                        val isSupportedByScript = uri.contains("gofile.io") || uri.contains("buzzheavier.com") || uri.contains("bzzhr.co")
+                        val isSupportedByScript = isUrlSupportedByScript(uri)
                         if (Settings.useDownloadScripts && isSupportedByScript) {
                             triggerAria2Download(uri, mainActivity, title)
                         } else {
@@ -710,6 +710,16 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
     }
 }
 
+fun isUrlSupportedByScript(url: String): Boolean {
+    return url.contains("gofile.io") ||
+           url.contains("buzzheavier.com") ||
+           url.contains("bzzhr.co") ||
+           url.contains("pixeldrain.com") ||
+           url.contains("mediafire.com") ||
+           url.contains("datanodes.to") ||
+           url.contains("fuckingfast.co")
+}
+
 fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
@@ -721,11 +731,12 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
         try {
             var finalUrl = url
             var header: String? = null
+            var resolutionFailed = false
 
             if (Settings.useDownloadScripts) {
                 if (url.contains("gofile.io")) {
                     withContext(Dispatchers.IO) {
-                        val id = url.split("/").lastOrNull()
+                        val id = url.trimEnd('/').split("/").lastOrNull()?.split("?")?.firstOrNull()
                         if (id != null) {
                             val token = GofileApi.authorize()
                             if (token != null) {
@@ -733,18 +744,43 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                                 if (directLink != null) {
                                     finalUrl = directLink
                                     header = "Cookie: accountToken=$token"
-                                }
-                            }
-                        }
+                                } else { resolutionFailed = true }
+                            } else { resolutionFailed = true }
+                        } else { resolutionFailed = true }
                     }
                 } else if (url.contains("buzzheavier.com") || url.contains("bzzhr.co")) {
                     withContext(Dispatchers.IO) {
                         val directLink = BuzzHeavierApi.getDirectLink(url)
-                        if (directLink != null) {
-                            finalUrl = directLink
-                        }
+                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                    }
+                } else if (url.contains("pixeldrain.com")) {
+                    withContext(Dispatchers.IO) {
+                        val directLink = PixelDrainApi.unlock(url)
+                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                    }
+                } else if (url.contains("mediafire.com")) {
+                    withContext(Dispatchers.IO) {
+                        val directLink = MediafireApi.getDownloadUrl(url)
+                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                    }
+                } else if (url.contains("datanodes.to")) {
+                    withContext(Dispatchers.IO) {
+                        val directLink = DatanodesApi.getDownloadUrl(url)
+                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                    }
+                } else if (url.contains("fuckingfast.co")) {
+                    withContext(Dispatchers.IO) {
+                        val directLink = FuckingFastApi.getDirectLink(url)
+                        if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
                     }
                 }
+            }
+
+            if (resolutionFailed) {
+                android.widget.Toast.makeText(activity, "Erro ao processar link automático. Tente pelo navegador.", android.widget.Toast.LENGTH_LONG).show()
+                val index = activeDownloads.indexOfFirst { it.id == downloadId }
+                if (index != -1) { activeDownloads.removeAt(index) }
+                return@launch
             }
 
             val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
