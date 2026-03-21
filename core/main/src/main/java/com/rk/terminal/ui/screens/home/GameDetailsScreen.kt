@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LibraryAdd
+import androidx.compose.material.icons.filled.LibraryAddCheck
 import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -86,6 +87,7 @@ fun GameDetailsScreen(
     var isSearchingSources by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
     var isAddingToLibrary by remember { mutableStateOf(false) }
+    var isAlreadyInLibrary by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -164,6 +166,22 @@ fun GameDetailsScreen(
                         }
                     }
                     localRepacks = localResults
+
+                    // Check if already in library
+                    val userId = Settings.userId
+                    if (userId.isNotBlank()) {
+                        val libUrl = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library"
+                        client.newCall(Request.Builder().url(libUrl).build()).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string()
+                                val data = gson.fromJson<Map<String, Any>>(body, object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type)
+                                val libraryList = data["library"] as? List<Map<String, Any>>
+                                isAlreadyInLibrary = libraryList?.any {
+                                    it["objectId"] == gameObjectId && it["shop"] == gameShop
+                                } ?: false
+                            }
+                        }
+                    }
 
                     // Hydra Reviews
                     val reviewsUrl = "$baseUrl/reviews?take=5&skip=0&sortBy=newest"
@@ -277,11 +295,18 @@ fun GameDetailsScreen(
                 },
                 actions = {
                     if (Settings.userId.isNotBlank()) {
-                        IconButton(onClick = { addToLibrary() }, enabled = !isAddingToLibrary) {
+                        IconButton(
+                            onClick = { if (!isAlreadyInLibrary) addToLibrary() },
+                            enabled = !isAddingToLibrary
+                        ) {
                             if (isAddingToLibrary) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.LibraryAdd, contentDescription = "Adicionar à Biblioteca")
+                                Icon(
+                                    imageVector = if (isAlreadyInLibrary) Icons.Default.LibraryAddCheck else Icons.Default.LibraryAdd,
+                                    contentDescription = if (isAlreadyInLibrary) "Na Biblioteca" else "Adicionar à Biblioteca",
+                                    tint = if (isAlreadyInLibrary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
                     }

@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
                                     if (response.isSuccessful) {
                                         val body = response.body?.string()
                                         val profile = Gson().fromJson(body, HydraProfile::class.java)
-                                                profile?.let { Settings.updateFromProfile(it) }
+                                        profile?.let { Settings.updateFromProfile(it) }
                                     }
                                 }
                             } catch (e: Exception) {

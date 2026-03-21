@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -36,6 +37,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -311,7 +313,20 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             contentDescription = null,
                             modifier = Modifier.fillMaxWidth().height(180.dp),
                             contentScale = ContentScale.Crop,
-                            alpha = 0.8f
+                            alpha = 0.7f
+                        )
+
+                        // Gradient Scrim for better text readability and look
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)),
+                                        startY = 100f
+                                    )
+                                )
                         )
 
                         if (isEditing) {
@@ -330,7 +345,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface,
                             border = androidx.compose.foundation.BorderStroke(4.dp, MaterialTheme.colorScheme.surface),
-                            tonalElevation = 12.dp
+                            tonalElevation = 16.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 AsyncImage(
@@ -463,17 +478,17 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         // Recent Games Section
                         if (!profile?.recentGames.isNullOrEmpty()) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Jogos Recentes",
+                                    text = "Atividade Recente",
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.ExtraBold
                                 )
                                 TextButton(onClick = { navController.navigate(MainActivityRoutes.Library.route) }) {
-                                    Text("Ver todos", color = MaterialTheme.colorScheme.primary)
+                                    Text("Ver Biblioteca", color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             LazyRow(
@@ -483,19 +498,20 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             ) {
                                 items(profile?.recentGames ?: emptyList()) { game ->
                                     ElevatedCard(
-                                        modifier = Modifier.width(130.dp),
-                                        shape = RoundedCornerShape(12.dp)
+                                        modifier = Modifier.width(140.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(12.dp)) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
                                             AsyncImage(
                                                 model = game.iconUrl,
                                                 contentDescription = null,
-                                                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)),
+                                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
                                                 contentScale = ContentScale.Crop
                                             )
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Text(game.title ?: "", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(game.title ?: "", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                                         }
                                     }
                                 }
@@ -544,8 +560,8 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             Text(
                                 text = "Amigos (${profile?.friends?.size})",
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(vertical = 8.dp),
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(vertical = 12.dp),
                                 textAlign = TextAlign.Start
                             )
 
