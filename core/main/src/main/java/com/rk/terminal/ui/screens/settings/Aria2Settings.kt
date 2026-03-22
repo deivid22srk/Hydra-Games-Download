@@ -41,6 +41,7 @@ fun Aria2Settings(navController: NavController) {
     var useMediafireScript by remember { mutableStateOf(Settings.useMediafireScript) }
     var useDatanodesScript by remember { mutableStateOf(Settings.useDatanodesScript) }
     var useFuckingfastScript by remember { mutableStateOf(Settings.useFuckingfastScript) }
+    var useRootzScript by remember { mutableStateOf(Settings.useRootzScript) }
     var fallbackToBrowserOnError by remember { mutableStateOf(Settings.fallbackToBrowserOnError) }
     var useExternalBrowser by remember { mutableStateOf(Settings.useExternalBrowser) }
     var selectedBrowserPackage by remember { mutableStateOf(Settings.selectedExternalBrowserPackage) }
@@ -269,6 +270,10 @@ fun Aria2Settings(navController: NavController) {
                 ScriptToggle("FuckingFast", useFuckingfastScript) {
                     useFuckingfastScript = it
                     Settings.useFuckingfastScript = it
+                }
+                ScriptToggle("Rootz", useRootzScript) {
+                    useRootzScript = it
+                    Settings.useRootzScript = it
                 }
             }
         }

@@ -47,7 +47,7 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
     val tabs = remember { mutableStateListOf<BrowserTab>() }
     var activeTabId by remember { mutableStateOf<String?>(null) }
 
-    var showDownloadDialog by remember { mutableStateOf<String?>(null) }
+    var showDownloadDialog by remember { mutableStateOf<Map<String, String>?>(null) }
     var showRedirectDialog by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var redirectResult by remember { mutableStateOf<Message?>(null) }
 
@@ -115,8 +115,14 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                     return true
                 }
             }
-            setDownloadListener { downloadUrl, _, _, _, _ ->
-                showDownloadDialog = downloadUrl
+            setDownloadListener { downloadUrl, userAgent, contentDisposition, mimetype, contentLength ->
+                val cookies = CookieManager.getInstance().getCookie(downloadUrl)
+                showDownloadDialog = mapOf(
+                    "url" to downloadUrl,
+                    "userAgent" to userAgent,
+                    "cookies" to (cookies ?: ""),
+                    "referer" to (url ?: "")
+                )
             }
             if (initialUrl != null) {
                 loadUrl(initialUrl)
@@ -142,13 +148,21 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
     }
 
     if (showDownloadDialog != null) {
+        val downloadData = showDownloadDialog!!
         AlertDialog(
             onDismissRequest = { showDownloadDialog = null },
             title = { Text("Confirmar Download") },
-            text = { Text("Deseja baixar este arquivo via Aria2?\n\nURL: ${showDownloadDialog}") },
+            text = { Text("Deseja baixar este arquivo via Aria2?\n\nURL: ${downloadData["url"]}") },
             confirmButton = {
                 Button(onClick = {
-                    triggerAria2Download(showDownloadDialog!!, mainActivity, "Download do Navegador")
+                    triggerAria2Download(
+                        url = downloadData["url"]!!,
+                        activity = mainActivity,
+                        title = "Download do Navegador",
+                        userAgent = downloadData["userAgent"],
+                        cookies = downloadData["cookies"],
+                        referer = downloadData["referer"]
+                    )
                     showDownloadDialog = null
                     navController.popBackStack()
                 }) {
@@ -284,7 +298,17 @@ fun BrowserScreen(url: String, mainActivity: MainActivity, navController: NavCon
                         val currentWv = currentTab?.webView
 
                         IconButton(onClick = {
-                            currentWv?.url?.let { showDownloadDialog = it }
+                            currentWv?.let { wv ->
+                                val downloadUrl = wv.url ?: return@let
+                                val userAgent = wv.settings.userAgentString
+                                val cookies = CookieManager.getInstance().getCookie(downloadUrl)
+                                showDownloadDialog = mapOf(
+                                    "url" to downloadUrl,
+                                    "userAgent" to userAgent,
+                                    "cookies" to (cookies ?: ""),
+                                    "referer" to (wv.url ?: "")
+                                )
+                            }
                         }) {
                             Icon(Icons.Default.Download, contentDescription = "Baixar com Aria2")
                         }

@@ -755,7 +755,8 @@ fun isUrlSupportedByScript(url: String): Boolean {
            (lowerUrl.contains("pixeldrain.com") && Settings.usePixeldrainScript) ||
            (lowerUrl.contains("mediafire.com") && Settings.useMediafireScript) ||
            (lowerUrl.contains("datanodes.to") && Settings.useDatanodesScript) ||
-           (lowerUrl.contains("fuckingfast.co") && Settings.useFuckingfastScript)
+           (lowerUrl.contains("fuckingfast.co") && Settings.useFuckingfastScript) ||
+           (lowerUrl.contains("rootz.so") && Settings.useRootzScript)
 }
 
 
@@ -777,7 +778,16 @@ fun openBrowser(url: String, activity: MainActivity, navController: NavControlle
     }
 }
 
-fun triggerAria2Download(url: String, activity: MainActivity, title: String, navController: NavController? = null, onLoading: (Boolean) -> Unit = {}) {
+fun triggerAria2Download(
+    url: String,
+    activity: MainActivity,
+    title: String,
+    navController: NavController? = null,
+    userAgent: String? = null,
+    cookies: String? = null,
+    referer: String? = null,
+    onLoading: (Boolean) -> Unit = {}
+) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
     if (activeDownloads.none { it.id == downloadId }) {
@@ -831,6 +841,11 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, nav
                     val directLink = FuckingFastApi.getDirectLink(url)
                     if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
                 }
+            } else if (url.contains("rootz.so") && Settings.useRootzScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = RootzApi.getDownloadUrl(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
             }
 
             if (resolutionFailed) {
@@ -863,7 +878,7 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, nav
                 "dir" to downloadPath,
                 "max-connection-per-server" to maxConn.toString(),
                 "split" to maxConn.toString(),
-                "user-agent" to Settings.aria2UserAgent,
+                "user-agent" to (userAgent ?: Settings.aria2UserAgent),
                 "async-dns" to "false",
                 "check-certificate" to "false",
                 "max-tries" to "10",
@@ -871,9 +886,16 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, nav
                 "file-allocation" to "none",
                 "gid" to downloadId
             )
-            if (header != null) {
-                options["header"] = listOf(header!!)
+
+            val headersList = mutableListOf<String>()
+            if (header != null) headersList.add(header!!)
+            if (!cookies.isNullOrBlank()) headersList.add("Cookie: $cookies")
+            if (!referer.isNullOrBlank()) headersList.add("Referer: $referer")
+
+            if (headersList.isNotEmpty()) {
+                options["header"] = headersList
             }
+
             params.add(options)
 
             val rpcRequestMap = mapOf(
@@ -908,12 +930,12 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, nav
                             }
                         } else {
                             onLoading(false)
-                            startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header)
+                            startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header, userAgent, cookies, referer)
                         }
                     }
                 } catch (e: Exception) {
                     onLoading(false)
-                    startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header)
+                    startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header, userAgent, cookies, referer)
                 }
             }
         } catch (e: Exception) {
@@ -924,16 +946,31 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, nav
     }
 }
 
-private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String, header: String? = null) {
+private fun startAria2InTerminal(
+    url: String,
+    activity: MainActivity,
+    title: String,
+    downloadId: String,
+    downloadPath: String,
+    header: String? = null,
+    userAgent: String? = null,
+    cookies: String? = null,
+    referer: String? = null
+) {
     activity.lifecycleScope.launch(Dispatchers.Main) {
         val maxConn = Settings.aria2MaxConnections
 
-        val headerArg = if (header != null) " --header=\"$header\"" else ""
+        var extraArgs = ""
+        if (header != null) extraArgs += " --header=\"$header\""
+        if (!cookies.isNullOrBlank()) extraArgs += " --header=\"Cookie: $cookies\""
+        if (!referer.isNullOrBlank()) extraArgs += " --header=\"Referer: $referer\""
+
+        val ua = userAgent ?: Settings.aria2UserAgent
 
         // Run as standalone download in terminal to avoid port conflicts with daemon
         val aria2Cmd = "aria2c --dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
-                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --check-certificate=false " +
-                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId$headerArg \"$url\""
+                "--user-agent=\"$ua\" --async-dns=false --check-certificate=false " +
+                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId$extraArgs \"$url\""
 
         val initialArgs = listOf("sh", "-c", aria2Cmd)
 

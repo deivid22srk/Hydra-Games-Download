@@ -100,7 +100,7 @@ object Settings {
         set(value) = Preference.setBoolean(key = "shortcuts_enabled", value)
 
     var useDownloadScripts
-        get() = Preference.getBoolean(key = "use_download_scripts", default = true)
+        get() = Preference.getBoolean(key = "use_download_scripts", default = false)
         set(value) = Preference.setBoolean(key = "use_download_scripts", value = value)
 
     var useGofileScript
@@ -126,6 +126,10 @@ object Settings {
     var useFuckingfastScript
         get() = Preference.getBoolean(key = "use_fuckingfast_script", default = true)
         set(value) = Preference.setBoolean(key = "use_fuckingfast_script", value = value)
+
+    var useRootzScript
+        get() = Preference.getBoolean(key = "use_rootz_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_rootz_script", value = value)
 
     var fallbackToBrowserOnError
         get() = Preference.getBoolean(key = "fallback_to_browser_on_error", default = true)
