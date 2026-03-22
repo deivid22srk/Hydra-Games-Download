@@ -19,6 +19,7 @@ import androidx.navigation.NavController
 import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.screens.home.DownloadsScreen
 import com.rk.terminal.ui.screens.home.HomeScreen
+import com.rk.terminal.ui.screens.home.NavigationState
 import com.rk.terminal.ui.screens.settings.Settings
 import com.rk.terminal.ui.screens.terminal.TerminalScreen
 
@@ -30,7 +31,7 @@ fun MainContainer(
     navController: NavController,
     sharedGameViewModel: SharedGameViewModel
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val selectedTab = NavigationState.selectedTab
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -39,25 +40,25 @@ fun MainContainer(
             NavigationBar {
                 NavigationBarItem(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = { NavigationState.selectedTab = 0 },
                     label = { Text("Início") },
                     icon = { Icon(Icons.Default.Home, contentDescription = null) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = { NavigationState.selectedTab = 1 },
                     label = { Text("Terminal") },
                     icon = { Icon(Icons.Default.Terminal, contentDescription = null) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = { NavigationState.selectedTab = 2 },
                     label = { Text("Downloads") },
                     icon = { Icon(Icons.Default.Download, contentDescription = null) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
+                    onClick = { NavigationState.selectedTab = 3 },
                     label = { Text("Configurações") },
                     icon = { Icon(Icons.Default.Settings, contentDescription = null) }
                 )

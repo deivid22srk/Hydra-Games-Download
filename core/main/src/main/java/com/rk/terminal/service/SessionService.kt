@@ -93,6 +93,8 @@ class SessionService : Service() {
         } else {
             startForeground(1, notification)
         }
+
+        com.rk.terminal.ui.screens.home.DownloadManager.startPolling(this)
     }
 
 

@@ -790,8 +790,8 @@ fun triggerAria2Download(
 ) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
-    if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
+    if (DownloadManager.activeDownloads.none { it.id == downloadId }) {
+        DownloadManager.activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
     }
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
@@ -850,8 +850,8 @@ fun triggerAria2Download(
 
             if (resolutionFailed) {
                 onLoading(false)
-                val index = activeDownloads.indexOfFirst { it.id == downloadId }
-                if (index != -1) { activeDownloads.removeAt(index) }
+                val index = DownloadManager.activeDownloads.indexOfFirst { it.id == downloadId }
+                if (index != -1) { DownloadManager.activeDownloads.removeAt(index) }
 
                 if (Settings.fallbackToBrowserOnError && navController != null) {
                     android.widget.Toast.makeText(activity, "Falha na automação. Abrindo navegador...", android.widget.Toast.LENGTH_SHORT).show()
@@ -921,9 +921,9 @@ fun triggerAria2Download(
                             val gid = respMap["result"] as? String
 
                             withContext(Dispatchers.Main) {
-                                val index = activeDownloads.indexOfFirst { it.id == downloadId }
+                                val index = DownloadManager.activeDownloads.indexOfFirst { it.id == downloadId }
                                 if (index != -1) {
-                                    activeDownloads[index] = activeDownloads[index].copy(gid = gid)
+                                    DownloadManager.activeDownloads[index] = DownloadManager.activeDownloads[index].copy(gid = gid)
                                 }
                                 onLoading(false)
                                 android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()
