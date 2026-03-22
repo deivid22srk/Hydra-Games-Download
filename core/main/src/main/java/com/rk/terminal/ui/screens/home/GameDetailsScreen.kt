@@ -259,28 +259,57 @@ fun GameDetailsScreen(
                 try {
                     val client = HydraApi.getClient()
                     val gson = Gson()
+
+                    // The Hydra API expects objectId and shop as path parameters for PUT
+                    // Or objectId and shop in the body for POST.
+                    // Investigating PC version, it usually uses PUT /profile/games/{shop}/{objectId}
+                    // to track/add games.
+
                     val body = mapOf(
                         "objectId" to gameObjectId,
                         "shop" to gameShop,
                         "playTimeInMilliseconds" to 0,
                         "lastTimePlayed" to null
                     )
+
+                    // Standard addition endpoint
                     val request = Request.Builder()
                         .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
                         .post(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
                         .build()
 
                     client.newCall(request).execute().use { response ->
-                        withContext(Dispatchers.Main) {
-                            if (response.isSuccessful) {
+                        if (response.isSuccessful) {
+                            withContext(Dispatchers.Main) {
+                                isAlreadyInLibrary = true
                                 android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                android.widget.Toast.makeText(mainActivity, "Erro ao adicionar.", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            // Try the PUT variant used for synchronization/tracking
+                            val syncUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$gameShop/$gameObjectId"
+                            val syncRequest = Request.Builder()
+                                .url(syncUrl)
+                                .put(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
+                                .build()
+
+                            client.newCall(syncRequest).execute().use { syncResponse ->
+                                withContext(Dispatchers.Main) {
+                                    if (syncResponse.isSuccessful) {
+                                        isAlreadyInLibrary = true
+                                        android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        val errorMsg = syncResponse.body?.string() ?: "Erro desconhecido"
+                                        android.widget.Toast.makeText(mainActivity, "Erro ao adicionar: ${syncResponse.code}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             }
                         }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(mainActivity, "Falha na rede: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 } finally {
                     withContext(Dispatchers.Main) { isAddingToLibrary = false }
                 }
