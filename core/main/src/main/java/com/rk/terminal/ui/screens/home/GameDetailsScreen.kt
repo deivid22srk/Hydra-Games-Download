@@ -147,21 +147,19 @@ fun GameDetailsScreen(
                     val localResults = mutableListOf<LocalRepack>()
                     Settings.hydraSources.filter { it.isEnabled }.forEach { config ->
                         try {
-                            client.newCall(Request.Builder().url(config.url).build()).execute().use { response ->
-                                if (response.isSuccessful) {
-                                    val source = gson.fromJson(response.body?.string(), HydraSource::class.java)
-                                    val sourceName = source?.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
-                                    source?.downloads?.filter {
-                                        it.title?.contains(gameTitle, ignoreCase = true) == true ||
-                                        gameTitle.contains(it.title ?: "", ignoreCase = true)
-                                    }?.forEach { game ->
-                                        localResults.add(LocalRepack(
-                                            title = game.title ?: "Sem nome",
-                                            sourceName = sourceName,
-                                            uris = game.uris ?: emptyList(),
-                                            fileSize = game.fileSize
-                                        ))
-                                    }
+                            val source = HydraSourceCache.getSource(mainActivity, config.url)
+                            if (source != null) {
+                                val sourceName = source.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
+                                source.downloads?.filter {
+                                    it.title?.contains(gameTitle, ignoreCase = true) == true ||
+                                    gameTitle.contains(it.title ?: "", ignoreCase = true)
+                                }?.forEach { game ->
+                                    localResults.add(LocalRepack(
+                                        title = game.title ?: "Sem nome",
+                                        sourceName = sourceName,
+                                        uris = game.uris ?: emptyList(),
+                                        fileSize = game.fileSize
+                                    ))
                                 }
                             }
                         } catch (e: Exception) {

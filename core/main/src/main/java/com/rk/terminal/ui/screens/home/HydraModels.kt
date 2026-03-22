@@ -4,7 +4,8 @@ import com.google.gson.annotations.SerializedName
 
 data class HydraSourceConfig(
     val url: String,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val lastDownloaded: Long? = null
 )
 
 data class HydraDownloadSource(
