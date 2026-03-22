@@ -21,6 +21,17 @@ object HydraApi {
 
     fun getClient(): OkHttpClient = client
 
+    fun revalidateSession() {
+        if (Settings.refreshToken.isNotBlank() && System.currentTimeMillis() + 300000 > Settings.tokenExpiration) {
+            // Token is expired or about to expire in 5 minutes
+            synchronized(this) {
+                if (System.currentTimeMillis() + 300000 > Settings.tokenExpiration) {
+                    AuthInterceptor().refreshAccessToken()
+                }
+            }
+        }
+    }
+
     private class UserAgentInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request().newBuilder()
@@ -31,6 +42,52 @@ object HydraApi {
     }
 
     private class AuthInterceptor : Interceptor {
+        fun refreshAccessToken(): Boolean {
+            val client = baseClient
+            val gson = Gson()
+            val requestBody = mapOf("refreshToken" to Settings.refreshToken)
+            val json = gson.toJson(requestBody)
+            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
+
+            val request = Request.Builder()
+                .url("https://hydra-api-us-east-1.losbroxas.org/auth/refresh")
+                .post(body)
+                .build()
+
+            return try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val respBody = response.body?.string()
+                    val data = gson.fromJson(respBody, Map::class.java)
+                    val newAccessToken = data["accessToken"] as? String
+                    val newRefreshToken = data["refreshToken"] as? String
+                    val expiresIn = (data["expiresIn"] as? Number)?.toLong() ?: 0L
+                    val userId = data["userId"] as? String
+
+                    if (newAccessToken != null && newRefreshToken != null) {
+                        Settings.accessToken = newAccessToken
+                        Settings.refreshToken = newRefreshToken
+                        Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
+                        if (userId != null) {
+                            Settings.userId = userId
+                        }
+                        true
+                    } else false
+                } else {
+                    if (response.code == 401 || response.code == 403) {
+                        // Refresh token is invalid/expired, log out
+                        Settings.accessToken = ""
+                        Settings.refreshToken = ""
+                        Settings.userId = ""
+                    }
+                    false
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+
         override fun intercept(chain: Interceptor.Chain): Response {
             val originalRequest = chain.request()
 
@@ -74,47 +131,5 @@ object HydraApi {
             return response
         }
 
-        private fun refreshAccessToken(): Boolean {
-            val client = baseClient
-            val gson = Gson()
-            val requestBody = mapOf("refreshToken" to Settings.refreshToken)
-            val json = gson.toJson(requestBody)
-            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
-
-            val request = Request.Builder()
-                .url("https://hydra-api-us-east-1.losbroxas.org/auth/refresh")
-                .post(body)
-                .build()
-
-            return try {
-                val response = client.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val respBody = response.body?.string()
-                    val data = gson.fromJson(respBody, Map::class.java)
-                    val newAccessToken = data["accessToken"] as? String
-                    val newRefreshToken = data["refreshToken"] as? String
-                    val expiresIn = (data["expiresIn"] as? Number)?.toLong() ?: 0L
-                    val userId = data["userId"] as? String
-
-                    if (newAccessToken != null && newRefreshToken != null) {
-                        Settings.accessToken = newAccessToken
-                        Settings.refreshToken = newRefreshToken
-                        Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
-                        if (userId != null) {
-                            Settings.userId = userId
-                        }
-                        true
-                    } else false
-                } else {
-                    // Clear tokens if refresh fails
-                    Settings.accessToken = ""
-                    Settings.refreshToken = ""
-                    false
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
-            }
-        }
     }
 }

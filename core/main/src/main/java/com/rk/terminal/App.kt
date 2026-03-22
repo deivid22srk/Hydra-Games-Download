@@ -45,6 +45,10 @@ class App : Application() {
 
         UpdateManager().onUpdate()
 
+        GlobalScope.launch(Dispatchers.IO) {
+            com.rk.terminal.ui.screens.home.HydraApi.revalidateSession()
+        }
+
         if (BuildConfig.DEBUG){
             StrictMode.setVmPolicy(
                 StrictMode.VmPolicy.Builder().apply {
