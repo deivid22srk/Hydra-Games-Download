@@ -99,6 +99,50 @@ object Settings {
         get() = Preference.getBoolean(key = "shortcuts_enabled", default = true)
         set(value) = Preference.setBoolean(key = "shortcuts_enabled", value)
 
+    var useDownloadScripts
+        get() = Preference.getBoolean(key = "use_download_scripts", default = false)
+        set(value) = Preference.setBoolean(key = "use_download_scripts", value = value)
+
+    var useGofileScript
+        get() = Preference.getBoolean(key = "use_gofile_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_gofile_script", value = value)
+
+    var useBuzzheavierScript
+        get() = Preference.getBoolean(key = "use_buzzheavier_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_buzzheavier_script", value = value)
+
+    var usePixeldrainScript
+        get() = Preference.getBoolean(key = "use_pixeldrain_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_pixeldrain_script", value = value)
+
+    var useMediafireScript
+        get() = Preference.getBoolean(key = "use_mediafire_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_mediafire_script", value = value)
+
+    var useDatanodesScript
+        get() = Preference.getBoolean(key = "use_datanodes_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_datanodes_script", value = value)
+
+    var useFuckingfastScript
+        get() = Preference.getBoolean(key = "use_fuckingfast_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_fuckingfast_script", value = value)
+
+    var useRootzScript
+        get() = Preference.getBoolean(key = "use_rootz_script", default = true)
+        set(value) = Preference.setBoolean(key = "use_rootz_script", value = value)
+
+    var fallbackToBrowserOnError
+        get() = Preference.getBoolean(key = "fallback_to_browser_on_error", default = true)
+        set(value) = Preference.setBoolean(key = "fallback_to_browser_on_error", value = value)
+
+    var useExternalBrowser
+        get() = Preference.getBoolean(key = "use_external_browser", default = false)
+        set(value) = Preference.setBoolean(key = "use_external_browser", value = value)
+
+    var selectedExternalBrowserPackage
+        get() = Preference.getString(key = "selected_external_browser_pkg", default = "")
+        set(value) = Preference.setString(key = "selected_external_browser_pkg", value = value)
+
     var hydraSources: List<com.rk.terminal.ui.screens.home.HydraSourceConfig>
         get() {
             val json = Preference.getString(key = "hydra_sources_v2", default = "[]")

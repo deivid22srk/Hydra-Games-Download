@@ -51,6 +51,8 @@ import androidx.lifecycle.lifecycleScope
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import com.rk.terminal.ui.screens.settings.WorkingMode
 import java.security.MessageDigest
+import android.content.Intent
+import android.net.Uri
 
 fun generateGid(url: String): String {
     val md = MessageDigest.getInstance("MD5")
@@ -77,6 +79,7 @@ fun GameDetailsScreen(
     val gameObjectId = viewModel.selectedGameObjectId
     val gameShop = viewModel.selectedGameShop
     var coverUrl by remember { mutableStateOf(viewModel.selectedGameCover) }
+    var isResolvingLink by remember { mutableStateOf(false) }
     var gameStats by remember { mutableStateOf<HydraGameStats?>(null) }
     var gameAssets by remember { mutableStateOf<HydraGameAssets?>(null) }
     var repacks by remember { mutableStateOf<List<HydraRepack>>(emptyList()) }
@@ -256,28 +259,57 @@ fun GameDetailsScreen(
                 try {
                     val client = HydraApi.getClient()
                     val gson = Gson()
+
+                    // The Hydra API expects objectId and shop as path parameters for PUT
+                    // Or objectId and shop in the body for POST.
+                    // Investigating PC version, it usually uses PUT /profile/games/{shop}/{objectId}
+                    // to track/add games.
+
                     val body = mapOf(
                         "objectId" to gameObjectId,
                         "shop" to gameShop,
                         "playTimeInMilliseconds" to 0,
                         "lastTimePlayed" to null
                     )
+
+                    // Standard addition endpoint
                     val request = Request.Builder()
                         .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
                         .post(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
                         .build()
 
                     client.newCall(request).execute().use { response ->
-                        withContext(Dispatchers.Main) {
-                            if (response.isSuccessful) {
+                        if (response.isSuccessful) {
+                            withContext(Dispatchers.Main) {
+                                isAlreadyInLibrary = true
                                 android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                android.widget.Toast.makeText(mainActivity, "Erro ao adicionar.", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            // Try the PUT variant used for synchronization/tracking
+                            val syncUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$gameShop/$gameObjectId"
+                            val syncRequest = Request.Builder()
+                                .url(syncUrl)
+                                .put(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
+                                .build()
+
+                            client.newCall(syncRequest).execute().use { syncResponse ->
+                                withContext(Dispatchers.Main) {
+                                    if (syncResponse.isSuccessful) {
+                                        isAlreadyInLibrary = true
+                                        android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        val errorMsg = syncResponse.body?.string() ?: "Erro desconhecido"
+                                        android.widget.Toast.makeText(mainActivity, "Erro ao adicionar: ${syncResponse.code}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             }
                         }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(mainActivity, "Falha na rede: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 } finally {
                     withContext(Dispatchers.Main) { isAddingToLibrary = false }
                 }
@@ -373,7 +405,11 @@ fun GameDetailsScreen(
                         Icon(Icons.Default.Download, contentDescription = null)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("BAIXAR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(if (isResolvingLink) "PROCESSANDO..." else "BAIXAR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                if (isResolvingLink) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
                 }
 
                 // Info Cards
@@ -614,7 +650,9 @@ fun GameDetailsScreen(
                         title = repack.title ?: "Sem título",
                         subtitle = "${repackerName(repack)} • ${repack.fileSize ?: "Desconhecido"}${if (repack.uploadDate != null) " • ${repack.uploadDate}" else ""}",
                         uris = repack.uris ?: emptyList(),
-                        navController = navController
+                        navController = navController,
+                        mainActivity = mainActivity,
+                        onLoading = { isResolvingLink = it }
                     )
                 }
 
@@ -624,7 +662,9 @@ fun GameDetailsScreen(
                         title = repack.title,
                         subtitle = "Fonte: ${repack.sourceName}${if (repack.fileSize != null) " • ${repack.fileSize}" else ""}",
                         uris = repack.uris,
-                        navController = navController
+                        navController = navController,
+                        mainActivity = mainActivity,
+                        onLoading = { isResolvingLink = it }
                     )
                 }
 
@@ -635,7 +675,9 @@ fun GameDetailsScreen(
                             title = "Link Direto",
                             subtitle = uri,
                             uris = listOf(uri),
-                            navController = navController
+                            navController = navController,
+                            mainActivity = mainActivity,
+                            onLoading = { isResolvingLink = it }
                         )
                     }
                 }
@@ -675,7 +717,7 @@ fun getHostFromUrl(url: String): String? {
 }
 
 @Composable
-fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController) {
+fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navController: NavController, mainActivity: MainActivity, onLoading: (Boolean) -> Unit) {
     OutlinedCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
     ) {
@@ -686,8 +728,12 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
             uris.forEach { uri ->
                 Button(
                     onClick = {
-                        val encodedUrl = URLEncoder.encode(uri, "UTF-8")
-                        navController.navigate("browser/$encodedUrl")
+                        val isSupportedByScript = isUrlSupportedByScript(uri)
+                        if (Settings.useDownloadScripts && isSupportedByScript) {
+                            triggerAria2Download(uri, mainActivity, title, navController = navController, onLoading = onLoading)
+                        } else {
+                            openBrowser(uri, mainActivity, navController)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 ) {
@@ -702,7 +748,46 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
     }
 }
 
-fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
+fun isUrlSupportedByScript(url: String): Boolean {
+    val lowerUrl = url.lowercase()
+    return (lowerUrl.contains("gofile.io") && Settings.useGofileScript) ||
+           ((lowerUrl.contains("buzzheavier.com") || lowerUrl.contains("bzzhr.co")) && Settings.useBuzzheavierScript) ||
+           (lowerUrl.contains("pixeldrain.com") && Settings.usePixeldrainScript) ||
+           (lowerUrl.contains("mediafire.com") && Settings.useMediafireScript) ||
+           (lowerUrl.contains("datanodes.to") && Settings.useDatanodesScript) ||
+           (lowerUrl.contains("fuckingfast.co") && Settings.useFuckingfastScript) ||
+           (lowerUrl.contains("rootz.so") && Settings.useRootzScript)
+}
+
+
+fun openBrowser(url: String, activity: MainActivity, navController: NavController) {
+    if (Settings.useExternalBrowser && Settings.selectedExternalBrowserPackage.isNotBlank()) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.setPackage(Settings.selectedExternalBrowserPackage)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val encodedUrl = URLEncoder.encode(url, "UTF-8")
+            navController.navigate("browser/$encodedUrl")
+        }
+    } else {
+        val encodedUrl = URLEncoder.encode(url, "UTF-8")
+        navController.navigate("browser/$encodedUrl")
+    }
+}
+
+fun triggerAria2Download(
+    url: String,
+    activity: MainActivity,
+    title: String,
+    navController: NavController? = null,
+    userAgent: String? = null,
+    cookies: String? = null,
+    referer: String? = null,
+    onLoading: (Boolean) -> Unit = {}
+) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
     if (activeDownloads.none { it.id == downloadId }) {
@@ -711,6 +796,72 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
         try {
+            onLoading(true)
+            var finalUrl = url
+            var header: String? = null
+            var resolutionFailed = false
+
+            if (url.contains("gofile.io") && Settings.useGofileScript) {
+                withContext(Dispatchers.IO) {
+                    val id = url.trimEnd('/').split("/").lastOrNull()?.split("?")?.firstOrNull()
+                    if (id != null) {
+                        val token = GofileApi.authorize()
+                        if (token != null) {
+                            val directLink = GofileApi.getDownloadLink(id, token)
+                            if (directLink != null) {
+                                GofileApi.checkDownloadUrl(directLink, token)
+                                finalUrl = directLink
+                                header = "Cookie: accountToken=$token"
+                            } else { resolutionFailed = true }
+                        } else { resolutionFailed = true }
+                    } else { resolutionFailed = true }
+                }
+            } else if ((url.contains("buzzheavier.com") || url.contains("bzzhr.co")) && Settings.useBuzzheavierScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = BuzzHeavierApi.getDirectLink(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("pixeldrain.com") && Settings.usePixeldrainScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = PixelDrainApi.unlock(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("mediafire.com") && Settings.useMediafireScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = MediafireApi.getDownloadUrl(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("datanodes.to") && Settings.useDatanodesScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = DatanodesApi.getDownloadUrl(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("fuckingfast.co") && Settings.useFuckingfastScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = FuckingFastApi.getDirectLink(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            } else if (url.contains("rootz.so") && Settings.useRootzScript) {
+                withContext(Dispatchers.IO) {
+                    val directLink = RootzApi.getDownloadUrl(url)
+                    if (directLink != null) { finalUrl = directLink } else { resolutionFailed = true }
+                }
+            }
+
+            if (resolutionFailed) {
+                onLoading(false)
+                val index = activeDownloads.indexOfFirst { it.id == downloadId }
+                if (index != -1) { activeDownloads.removeAt(index) }
+
+                if (Settings.fallbackToBrowserOnError && navController != null) {
+                    android.widget.Toast.makeText(activity, "Falha na automação. Abrindo navegador...", android.widget.Toast.LENGTH_SHORT).show()
+                    openBrowser(url, activity, navController)
+                } else {
+                    android.widget.Toast.makeText(activity, "Erro ao processar link automático. Tente pelo navegador.", android.widget.Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+
             val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
             val rpcSecret = Settings.aria2RpcSecret
             val maxConn = Settings.aria2MaxConnections
@@ -722,19 +873,30 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
             if (rpcSecret.isNotBlank()) {
                 params.add("token:$rpcSecret")
             }
-            params.add(listOf(url))
-            params.add(mapOf(
+            params.add(listOf(finalUrl) as Any)
+            val options = mutableMapOf<String, Any>(
                 "dir" to downloadPath,
                 "max-connection-per-server" to maxConn.toString(),
                 "split" to maxConn.toString(),
-                "user-agent" to Settings.aria2UserAgent,
+                "user-agent" to (userAgent ?: Settings.aria2UserAgent),
                 "async-dns" to "false",
                 "check-certificate" to "false",
                 "max-tries" to "10",
                 "retry-wait" to "5",
                 "file-allocation" to "none",
                 "gid" to downloadId
-            ))
+            )
+
+            val headersList = mutableListOf<String>()
+            if (header != null) headersList.add(header!!)
+            if (!cookies.isNullOrBlank()) headersList.add("Cookie: $cookies")
+            if (!referer.isNullOrBlank()) headersList.add("Referer: $referer")
+
+            if (headersList.isNotEmpty()) {
+                options["header"] = headersList
+            }
+
+            params.add(options)
 
             val rpcRequestMap = mapOf(
                 "jsonrpc" to "2.0",
@@ -763,30 +925,52 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String) {
                                 if (index != -1) {
                                     activeDownloads[index] = activeDownloads[index].copy(gid = gid)
                                 }
+                                onLoading(false)
                                 android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()
                             }
                         } else {
-                            startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                            onLoading(false)
+                            startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header, userAgent, cookies, referer)
                         }
                     }
                 } catch (e: Exception) {
-                    startAria2InTerminal(url, activity, title, downloadId, downloadPath)
+                    onLoading(false)
+                    startAria2InTerminal(finalUrl, activity, title, downloadId, downloadPath, header, userAgent, cookies, referer)
                 }
             }
         } catch (e: Exception) {
+            onLoading(false)
+            android.widget.Toast.makeText(activity, "Erro inesperado: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
             e.printStackTrace()
         }
     }
 }
 
-private fun startAria2InTerminal(url: String, activity: MainActivity, title: String, downloadId: String, downloadPath: String) {
+private fun startAria2InTerminal(
+    url: String,
+    activity: MainActivity,
+    title: String,
+    downloadId: String,
+    downloadPath: String,
+    header: String? = null,
+    userAgent: String? = null,
+    cookies: String? = null,
+    referer: String? = null
+) {
     activity.lifecycleScope.launch(Dispatchers.Main) {
         val maxConn = Settings.aria2MaxConnections
 
+        var extraArgs = ""
+        if (header != null) extraArgs += " --header=\"$header\""
+        if (!cookies.isNullOrBlank()) extraArgs += " --header=\"Cookie: $cookies\""
+        if (!referer.isNullOrBlank()) extraArgs += " --header=\"Referer: $referer\""
+
+        val ua = userAgent ?: Settings.aria2UserAgent
+
         // Run as standalone download in terminal to avoid port conflicts with daemon
         val aria2Cmd = "aria2c --dir=\"$downloadPath\" --max-connection-per-server=$maxConn --split=$maxConn " +
-                "--user-agent=\"${Settings.aria2UserAgent}\" --async-dns=false --check-certificate=false " +
-                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId \"$url\""
+                "--user-agent=\"$ua\" --async-dns=false --check-certificate=false " +
+                "--max-tries=10 --retry-wait=5 --file-allocation=none --gid=$downloadId$extraArgs \"$url\""
 
         val initialArgs = listOf("sh", "-c", aria2Cmd)
 
