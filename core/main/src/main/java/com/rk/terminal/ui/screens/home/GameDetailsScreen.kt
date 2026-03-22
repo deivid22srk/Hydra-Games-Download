@@ -720,12 +720,13 @@ fun DownloadOptionItem(title: String, subtitle: String, uris: List<String>, navC
 }
 
 fun isUrlSupportedByScript(url: String): Boolean {
-    return (url.contains("gofile.io") && Settings.useGofileScript) ||
-           ((url.contains("buzzheavier.com") || url.contains("bzzhr.co")) && Settings.useBuzzheavierScript) ||
-           (url.contains("pixeldrain.com") && Settings.usePixeldrainScript) ||
-           (url.contains("mediafire.com") && Settings.useMediafireScript) ||
-           (url.contains("datanodes.to") && Settings.useDatanodesScript) ||
-           (url.contains("fuckingfast.co") && Settings.useFuckingfastScript)
+    val lowerUrl = url.lowercase()
+    return (lowerUrl.contains("gofile.io") && Settings.useGofileScript) ||
+           ((lowerUrl.contains("buzzheavier.com") || lowerUrl.contains("bzzhr.co")) && Settings.useBuzzheavierScript) ||
+           (lowerUrl.contains("pixeldrain.com") && Settings.usePixeldrainScript) ||
+           (lowerUrl.contains("mediafire.com") && Settings.useMediafireScript) ||
+           (lowerUrl.contains("datanodes.to") && Settings.useDatanodesScript) ||
+           (lowerUrl.contains("fuckingfast.co") && Settings.useFuckingfastScript)
 }
 
 
@@ -769,6 +770,7 @@ fun triggerAria2Download(url: String, activity: MainActivity, title: String, nav
                         if (token != null) {
                             val directLink = GofileApi.getDownloadLink(id, token)
                             if (directLink != null) {
+                                GofileApi.checkDownloadUrl(directLink, token)
                                 finalUrl = directLink
                                 header = "Cookie: accountToken=$token"
                             } else { resolutionFailed = true }

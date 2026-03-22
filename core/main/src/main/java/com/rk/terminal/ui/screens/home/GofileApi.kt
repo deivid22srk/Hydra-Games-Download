@@ -58,7 +58,9 @@ object GofileApi {
     private fun getBaseHeaders(accountToken: String? = null): Map<String, String> {
         val headers = mutableMapOf(
             "User-Agent" to DEFAULT_USER_AGENT,
+            "Accept-Encoding" to "gzip",
             "Accept" to "*/*",
+            "Connection" to "keep-alive",
             "Origin" to "https://gofile.io",
             "Referer" to "https://gofile.io/"
         )
@@ -76,7 +78,7 @@ object GofileApi {
 
         val request = Request.Builder()
             .url("https://api.gofile.io/accounts")
-            .post("".toRequestBody("application/json".toMediaTypeOrNull()))
+            .post("{}".toRequestBody("application/json".toMediaTypeOrNull()))
             .apply { headers.forEach { (k, v) -> addHeader(k, v) } }
             .build()
 
@@ -98,6 +100,19 @@ object GofileApi {
 
     suspend fun getDownloadLink(id: String, token: String, password: String? = null): String? {
         return parseLinksRecursively(id, token, password)
+    }
+
+    suspend fun checkDownloadUrl(url: String, token: String) = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .head()
+            .addHeader("Cookie", "accountToken=$token")
+            .build()
+        try {
+            client.newCall(request).execute().close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private suspend fun parseLinksRecursively(id: String, token: String, password: String? = null): String? = withContext(Dispatchers.IO) {
