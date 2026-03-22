@@ -7,7 +7,7 @@ import java.security.MessageDigest
 
 object HydraSourceCache {
     private fun getCacheDir(context: Context): File {
-        val dir = File(context.cacheDir, "hydra_sources")
+        val dir = File(context.filesDir, "hydra_sources")
         if (!dir.exists()) dir.mkdirs()
         return dir
     }

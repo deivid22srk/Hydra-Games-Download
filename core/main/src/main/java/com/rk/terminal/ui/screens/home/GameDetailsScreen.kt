@@ -98,6 +98,33 @@ fun GameDetailsScreen(
         if (gameObjectId != null && gameShop != null) {
             isSearchingSources = true
             withContext(Dispatchers.IO) {
+                // First: Local Sources Search (Immediate result)
+                val localResults = mutableListOf<LocalRepack>()
+                Settings.hydraSources.filter { it.isEnabled }.forEach { config ->
+                    try {
+                        val source = HydraSourceCache.getSource(mainActivity, config.url)
+                        if (source != null) {
+                            val sourceName = source.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
+                            source.downloads?.filter {
+                                val titleMatch = it.title?.contains(gameTitle, ignoreCase = true) == true ||
+                                                 gameTitle.contains(it.title ?: "", ignoreCase = true)
+                                val objectIdMatch = it.objectId == gameObjectId && it.shop == gameShop
+                                titleMatch || (objectIdMatch && it.objectId != null)
+                            }?.forEach { game ->
+                                localResults.add(LocalRepack(
+                                    title = game.title ?: "Sem nome",
+                                    sourceName = sourceName,
+                                    uris = game.uris ?: emptyList(),
+                                    fileSize = game.fileSize
+                                ))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                withContext(Dispatchers.Main) { localRepacks = localResults }
+
                 val client = HydraApi.getClient()
                 val gson = Gson()
                 val baseUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId"
@@ -142,31 +169,6 @@ fun GameDetailsScreen(
                             }
                         }
                     }
-
-                    // Local Sources Search
-                    val localResults = mutableListOf<LocalRepack>()
-                    Settings.hydraSources.filter { it.isEnabled }.forEach { config ->
-                        try {
-                            val source = HydraSourceCache.getSource(mainActivity, config.url)
-                            if (source != null) {
-                                val sourceName = source.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
-                                source.downloads?.filter {
-                                    it.title?.contains(gameTitle, ignoreCase = true) == true ||
-                                    gameTitle.contains(it.title ?: "", ignoreCase = true)
-                                }?.forEach { game ->
-                                    localResults.add(LocalRepack(
-                                        title = game.title ?: "Sem nome",
-                                        sourceName = sourceName,
-                                        uris = game.uris ?: emptyList(),
-                                        fileSize = game.fileSize
-                                    ))
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    localRepacks = localResults
 
                     // Check if already in library
                     val userId = Settings.userId

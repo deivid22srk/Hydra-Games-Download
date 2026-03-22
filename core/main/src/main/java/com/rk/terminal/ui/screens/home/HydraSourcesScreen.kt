@@ -222,8 +222,10 @@ fun HydraSourcesScreen() {
                     Button(onClick = {
                         if (newSourceUrl.isNotBlank()) {
                             if (sources.none { it.url == newSourceUrl }) {
-                                sources.add(HydraSourceConfig(newSourceUrl))
+                                val config = HydraSourceConfig(newSourceUrl)
+                                sources.add(config)
                                 Settings.hydraSources = sources.toList()
+                                downloadSource(config)
                             }
                             newSourceUrl = ""
                             showAddDialog = false
