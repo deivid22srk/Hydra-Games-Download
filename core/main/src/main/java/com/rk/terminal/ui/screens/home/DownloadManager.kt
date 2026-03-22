@@ -249,6 +249,14 @@ object DownloadManager {
         callAria2Method("aria2.removeDownloadResult", listOf(gid))
     }
 
+    fun updateGlobalOptions() {
+        val options = mutableMapOf<String, String>()
+        options["max-overall-download-limit"] = Settings.aria2MaxDownloadLimit
+        options["max-connection-per-server"] = Settings.aria2MaxConnections.toString()
+
+        callAria2Method("aria2.changeGlobalOption", listOf(options))
+    }
+
     private fun callAria2Method(method: String, params: List<Any>) {
         val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
         val secret = Settings.aria2RpcSecret

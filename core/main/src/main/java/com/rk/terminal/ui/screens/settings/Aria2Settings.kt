@@ -19,6 +19,7 @@ import androidx.navigation.NavController
 import com.rk.components.compose.preferences.base.PreferenceGroup
 import com.rk.components.compose.preferences.base.PreferenceLayout
 import com.rk.settings.Settings
+import com.rk.terminal.ui.screens.home.DownloadManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +78,10 @@ fun Aria2Settings(navController: NavController) {
                 value = maxConnections,
                 onValueChange = {
                     maxConnections = it
-                    it.toIntOrNull()?.let { conn -> Settings.aria2MaxConnections = conn }
+                    it.toIntOrNull()?.let { conn ->
+                        Settings.aria2MaxConnections = conn
+                        DownloadManager.updateGlobalOptions()
+                    }
                 },
                 label = { Text("Máximo de Conexões por Servidor") },
                 supportingText = { Text("Padrão: 5") },
@@ -98,6 +102,7 @@ fun Aria2Settings(navController: NavController) {
                 onValueChange = {
                     maxDownloadLimit = it
                     Settings.aria2MaxDownloadLimit = it
+                    DownloadManager.updateGlobalOptions()
                 },
                 label = { Text("Limite Máximo de Download") },
                 supportingText = { Text("Ex: 1M, 10K. 0 = ilimitado. Padrão: 0") },
