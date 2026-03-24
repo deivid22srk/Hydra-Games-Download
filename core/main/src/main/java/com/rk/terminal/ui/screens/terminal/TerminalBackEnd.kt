@@ -14,7 +14,7 @@ import com.rk.libcommons.createFileIfNot
 import com.rk.libcommons.dpToPx
 import com.rk.settings.Settings
 import com.rk.terminal.ui.activities.terminal.MainActivity
-import com.rk.terminal.ui.screens.home.activeDownloads
+import com.rk.terminal.ui.screens.home.DownloadManager
 import com.rk.terminal.ui.screens.terminal.virtualkeys.SpecialButton
 import com.rk.terminal.ui.screens.terminal.virtualkeys.VirtualKeysView
 import com.termux.terminal.TerminalEmulator
@@ -54,14 +54,14 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
                 val gidMatch = if (matchResult.groupValues.size >= 3) matchResult.groupValues[1] else null
 
                 activity.runOnUiThread {
-                    val index = activeDownloads.indexOfFirst {
+                    val index = DownloadManager.activeDownloads.indexOfFirst {
                         (gidMatch != null && (it.id.startsWith(gidMatch) || it.gid?.startsWith(gidMatch) == true)) ||
                         it.title.contains(if (sessionId == "GoFileDownload") "GoFile" else "BuzzHeavier", ignoreCase = true)
                     }
 
                     if (index != -1) {
-                        val current = activeDownloads[index]
-                        activeDownloads[index] = current.copy(progress = progressValue, status = line.trim())
+                        val current = DownloadManager.activeDownloads[index]
+                        DownloadManager.activeDownloads[index] = current.copy(progress = progressValue, status = line.trim())
                     }
                 }
                 break
@@ -80,14 +80,14 @@ class TerminalBackEnd(val terminal: TerminalView,val activity: MainActivity) : T
 
         if (id == "GoFileDownload" || id == "BuzzHeavierDownload" || id == "Aria2Download") {
             activity.runOnUiThread {
-                val index = activeDownloads.indexOfFirst {
+                val index = DownloadManager.activeDownloads.indexOfFirst {
                     it.id.contains(id.replace("Aria2Download_", "")) ||
                     it.title.contains(if (id.contains("GoFile")) "GoFile" else "BuzzHeavier", ignoreCase = true)
                 }
                 if (index != -1) {
-                    val current = activeDownloads[index]
+                    val current = DownloadManager.activeDownloads[index]
                     val isSuccess = finishedSession.exitStatus == 0
-                    activeDownloads[index] = current.copy(
+                    DownloadManager.activeDownloads[index] = current.copy(
                         progress = 1f,
                         isCompleted = true,
                         status = if (isSuccess) "Download concluído" else "Download falhou (código ${finishedSession.exitStatus})"

@@ -98,6 +98,33 @@ fun GameDetailsScreen(
         if (gameObjectId != null && gameShop != null) {
             isSearchingSources = true
             withContext(Dispatchers.IO) {
+                // First: Local Sources Search (Immediate result)
+                val localResults = mutableListOf<LocalRepack>()
+                Settings.hydraSources.filter { it.isEnabled }.forEach { config ->
+                    try {
+                        val source = HydraSourceCache.getSource(mainActivity, config.url)
+                        if (source != null) {
+                            val sourceName = source.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
+                            source.downloads?.filter {
+                                val titleMatch = it.title?.contains(gameTitle, ignoreCase = true) == true ||
+                                                 gameTitle.contains(it.title ?: "", ignoreCase = true)
+                                val objectIdMatch = it.objectId == gameObjectId && it.shop == gameShop
+                                titleMatch || (objectIdMatch && it.objectId != null)
+                            }?.forEach { game ->
+                                localResults.add(LocalRepack(
+                                    title = game.title ?: "Sem nome",
+                                    sourceName = sourceName,
+                                    uris = game.uris ?: emptyList(),
+                                    fileSize = game.fileSize
+                                ))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                withContext(Dispatchers.Main) { localRepacks = localResults }
+
                 val client = HydraApi.getClient()
                 val gson = Gson()
                 val baseUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId"
@@ -142,33 +169,6 @@ fun GameDetailsScreen(
                             }
                         }
                     }
-
-                    // Local Sources Search
-                    val localResults = mutableListOf<LocalRepack>()
-                    Settings.hydraSources.filter { it.isEnabled }.forEach { config ->
-                        try {
-                            client.newCall(Request.Builder().url(config.url).build()).execute().use { response ->
-                                if (response.isSuccessful) {
-                                    val source = gson.fromJson(response.body?.string(), HydraSource::class.java)
-                                    val sourceName = source?.name ?: config.url.split("/").getOrNull(2) ?: "Desconhecida"
-                                    source?.downloads?.filter {
-                                        it.title?.contains(gameTitle, ignoreCase = true) == true ||
-                                        gameTitle.contains(it.title ?: "", ignoreCase = true)
-                                    }?.forEach { game ->
-                                        localResults.add(LocalRepack(
-                                            title = game.title ?: "Sem nome",
-                                            sourceName = sourceName,
-                                            uris = game.uris ?: emptyList(),
-                                            fileSize = game.fileSize
-                                        ))
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    localRepacks = localResults
 
                     // Check if already in library
                     val userId = Settings.userId
@@ -790,8 +790,8 @@ fun triggerAria2Download(
 ) {
     val downloadPath = Settings.downloadPath
     val downloadId = generateGid(url)
-    if (activeDownloads.none { it.id == downloadId }) {
-        activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
+    if (DownloadManager.activeDownloads.none { it.id == downloadId }) {
+        DownloadManager.activeDownloads.add(DownloadProgress(id = downloadId, title = title, progress = 0.1f, status = "Baixando via Aria2..."))
     }
 
     activity.lifecycleScope.launch(Dispatchers.Main) {
@@ -850,8 +850,8 @@ fun triggerAria2Download(
 
             if (resolutionFailed) {
                 onLoading(false)
-                val index = activeDownloads.indexOfFirst { it.id == downloadId }
-                if (index != -1) { activeDownloads.removeAt(index) }
+                val index = DownloadManager.activeDownloads.indexOfFirst { it.id == downloadId }
+                if (index != -1) { DownloadManager.activeDownloads.removeAt(index) }
 
                 if (Settings.fallbackToBrowserOnError && navController != null) {
                     android.widget.Toast.makeText(activity, "Falha na automação. Abrindo navegador...", android.widget.Toast.LENGTH_SHORT).show()
@@ -921,9 +921,9 @@ fun triggerAria2Download(
                             val gid = respMap["result"] as? String
 
                             withContext(Dispatchers.Main) {
-                                val index = activeDownloads.indexOfFirst { it.id == downloadId }
+                                val index = DownloadManager.activeDownloads.indexOfFirst { it.id == downloadId }
                                 if (index != -1) {
-                                    activeDownloads[index] = activeDownloads[index].copy(gid = gid)
+                                    DownloadManager.activeDownloads[index] = DownloadManager.activeDownloads[index].copy(gid = gid)
                                 }
                                 onLoading(false)
                                 android.widget.Toast.makeText(activity, "Download adicionado ao Aria2", android.widget.Toast.LENGTH_LONG).show()

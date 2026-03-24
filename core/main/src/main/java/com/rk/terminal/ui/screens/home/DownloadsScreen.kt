@@ -23,21 +23,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-data class DownloadProgress(
-    val id: String,
-    val gid: String? = null,
-    val title: String,
-    val progress: Float,
-    val status: String,
-    val speed: String = "",
-    val totalSize: String = "",
-    val isCompleted: Boolean = false,
-    val isPaused: Boolean = false,
-    val filePath: String? = null
-)
-
-val activeDownloads = mutableStateListOf<DownloadProgress>()
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen() {
@@ -45,21 +30,8 @@ fun DownloadsScreen() {
     var showDeleteDialog by remember { mutableStateOf<DownloadProgress?>(null) }
     var deleteFilesFromStorage by remember { mutableStateOf(false) }
 
-    // Polling Aria2 status
-    LaunchedEffect(Unit) {
-        val client = OkHttpClient()
-        val gson = Gson()
-        while (true) {
-            try {
-                updateAria2Status(client, gson)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            delay(2000)
-        }
-    }
-
     PreferenceLayoutLazyColumn(label = "Downloads Ativos", backArrowVisible = false) {
+        val activeDownloads = DownloadManager.activeDownloads
         if (activeDownloads.isEmpty()) {
             item {
                 Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
@@ -109,10 +81,10 @@ fun DownloadsScreen() {
                                     IconButton(onClick = {
                                         val targetGid = download.gid
                                         if (download.isPaused) {
-                                            resumeDownload(targetGid)
+                                            DownloadManager.resumeDownload(targetGid)
                                             updateLocalStatus(download.id, isPaused = false, status = "Retomando...")
                                         } else {
-                                            pauseDownload(targetGid)
+                                            DownloadManager.pauseDownload(targetGid)
                                             updateLocalStatus(download.id, isPaused = true, status = "Pausando...")
                                         }
                                     }) {
@@ -201,9 +173,9 @@ fun DownloadsScreen() {
                         val download = showDeleteDialog!!
                         if (download.gid != null) {
                             if (download.isCompleted) {
-                                removeDownloadResult(download.gid)
+                                DownloadManager.removeDownloadResult(download.gid)
                             } else {
-                                removeDownload(download.gid)
+                                DownloadManager.removeDownload(download.gid)
                             }
                         }
 
@@ -218,7 +190,7 @@ fun DownloadsScreen() {
                             }
                         }
 
-                        activeDownloads.removeIf { it.id == download.id }
+                        DownloadManager.activeDownloads.removeIf { it.id == download.id }
                         showDeleteDialog = null
                         deleteFilesFromStorage = false
                     },
@@ -237,183 +209,8 @@ fun DownloadsScreen() {
 }
 
 private fun updateLocalStatus(id: String, isPaused: Boolean, status: String) {
-    val index = activeDownloads.indexOfFirst { it.id == id }
+    val index = DownloadManager.activeDownloads.indexOfFirst { it.id == id }
     if (index != -1) {
-        activeDownloads[index] = activeDownloads[index].copy(isPaused = isPaused, status = status)
+        DownloadManager.activeDownloads[index] = DownloadManager.activeDownloads[index].copy(isPaused = isPaused, status = status)
     }
-}
-
-private suspend fun updateAria2Status(client: OkHttpClient, gson: Gson) {
-    val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
-    val secret = Settings.aria2RpcSecret
-
-    suspend fun callMethod(method: String, extraParams: List<Any> = emptyList()): List<Map<String, Any>>? {
-        val params = mutableListOf<Any>()
-        if (secret.isNotBlank()) params.add("token:$secret")
-        params.addAll(extraParams)
-
-        val requestBody = gson.toJson(mapOf(
-            "jsonrpc" to "2.0",
-            "id" to "q",
-            "method" to method,
-            "params" to params
-        )).toRequestBody("application/json".toMediaTypeOrNull())
-
-        val request = Request.Builder().url(rpcUrl).post(requestBody).build()
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string()
-                        val map = gson.fromJson(body, Map::class.java)
-                        val result = map["result"]
-                        if (result is List<*>) {
-                            result.filterIsInstance<Map<String, Any>>()
-                        } else null
-                    } else null
-                }
-            }.getOrNull()
-        }
-    }
-
-    val active = callMethod("aria2.tellActive") ?: emptyList()
-    val waiting = callMethod("aria2.tellWaiting", listOf(0, 100)) ?: emptyList()
-    val stopped = callMethod("aria2.tellStopped", listOf(0, 100)) ?: emptyList()
-
-    val allTasks = active + waiting + stopped
-
-    withContext(Dispatchers.Main) {
-        // Build a set of GIDs returned by RPC
-        val rpcGids = allTasks.mapNotNull { it["gid"] as? String }.toSet()
-
-        // Remove items from activeDownloads that are no longer in Aria2, not completed AND not paused/waiting
-        // This ensures items cleared from Aria2 (but not completed) disappear from UI, 
-        // while allowing paused ones to remain even during status transitions.
-        activeDownloads.removeIf { it.gid != null && it.gid !in rpcGids && !it.isCompleted && !it.isPaused }
-
-        allTasks.forEach { res ->
-            val gid = res["gid"] as? String ?: return@forEach
-            val statusAttr = res["status"] as? String ?: ""
-            val completedLen = (res["completedLength"] as? String)?.toLongOrNull() ?: 0L
-            val totalLen = (res["totalLength"] as? String)?.toLongOrNull() ?: 0L
-            val speed = (res["downloadSpeed"] as? String)?.toLongOrNull() ?: 0L
-
-            val files = res["files"] as? List<Map<String, Any>>
-            val fileInfo = files?.firstOrNull()
-            val fullPath = fileInfo?.get("path") as? String
-            val fileName = fileInfo?.let {
-                val path = it["path"] as? String
-                if (path.isNullOrEmpty()) {
-                    val uris = it["uris"] as? List<Map<String, Any>>
-                    uris?.firstOrNull()?.let { (it["uri"] as? String)?.split("/")?.last()?.split("?")?.first() }
-                } else path.split("/").last()
-            } ?: "Download Aria2"
-
-            val progress = if (totalLen > 0) completedLen.toFloat() / totalLen else 0f
-            val speedStr = formatSpeed(speed)
-            val sizeStr = formatSize(totalLen)
-
-            val isPaused = statusAttr == "paused" || statusAttr == "waiting"
-            val isCompleted = statusAttr == "complete"
-
-            val existingIndex = activeDownloads.indexOfFirst { (it.gid != null && it.gid == gid) || it.id == gid }
-            if (existingIndex != -1) {
-                val current = activeDownloads[existingIndex]
-                activeDownloads[existingIndex] = current.copy(
-                    id = if (current.id.startsWith("http")) gid else current.id, // Update temp ID to real GID
-                    gid = gid,
-                    title = if (current.title == "Download do Navegador" || current.title == "Download Aria2") fileName else current.title,
-                    progress = progress,
-                    status = when(statusAttr) {
-                        "active" -> "Baixando..."
-                        "paused" -> "Pausado"
-                        "waiting" -> "Na fila"
-                        "complete" -> "Download concluído"
-                        "error" -> "Erro no download"
-                        else -> statusAttr
-                    },
-                    speed = speedStr,
-                    totalSize = sizeStr,
-                    isPaused = isPaused,
-                    isCompleted = isCompleted,
-                    filePath = fullPath
-                )
-            } else {
-                // Persistent: items found in Aria2 but not in our list (e.g. after restart)
-                activeDownloads.add(
-                    DownloadProgress(
-                        id = gid,
-                        gid = gid,
-                        title = fileName,
-                        progress = progress,
-                        status = if (isPaused) "Pausado" else if (isCompleted) "Concluído" else "Adicionado",
-                        speed = speedStr,
-                        totalSize = sizeStr,
-                        isPaused = isPaused,
-                        isCompleted = isCompleted,
-                        filePath = fullPath
-                    )
-                )
-            }
-        }
-    }
-}
-
-private fun formatSpeed(speedBytes: Long): String {
-    if (speedBytes <= 0) return ""
-    if (speedBytes < 1024) return "$speedBytes B/s"
-    val kb = speedBytes / 1024
-    if (kb < 1024) return "$kb KB/s"
-    val mb = kb.toFloat() / 1024
-    return "%.1f MB/s".format(mb)
-}
-
-private fun formatSize(bytes: Long): String {
-    if (bytes <= 0) return ""
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024
-    if (kb < 1024) return "$kb KB"
-    val mb = kb.toFloat() / 1024
-    return "%.1f MB".format(mb)
-}
-
-fun pauseDownload(gid: String) {
-    callAria2Method("aria2.pause", listOf(gid))
-}
-
-fun resumeDownload(gid: String) {
-    callAria2Method("aria2.unpause", listOf(gid))
-}
-
-fun removeDownload(gid: String) {
-    callAria2Method("aria2.remove", listOf(gid))
-}
-
-fun removeDownloadResult(gid: String) {
-    callAria2Method("aria2.removeDownloadResult", listOf(gid))
-}
-
-private fun callAria2Method(method: String, params: List<Any>) {
-    val client = OkHttpClient()
-    val gson = Gson()
-    val rpcUrl = "http://localhost:${Settings.aria2RpcPort}/jsonrpc"
-    val secret = Settings.aria2RpcSecret
-
-    val rpcParams = mutableListOf<Any>()
-    if (secret.isNotBlank()) rpcParams.add("token:$secret")
-    rpcParams.addAll(params)
-
-    val requestBody = gson.toJson(mapOf(
-        "jsonrpc" to "2.0",
-        "id" to "ctrl",
-        "method" to method,
-        "params" to rpcParams
-    )).toRequestBody("application/json".toMediaTypeOrNull())
-
-    val request = Request.Builder().url(rpcUrl).post(requestBody).build()
-
-    client.newCall(request).enqueue(object : okhttp3.Callback {
-        override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {}
-        override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) { response.close() }
-    })
 }

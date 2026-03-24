@@ -66,12 +66,13 @@ class MainActivity : ComponentActivity() {
                 if (service != null && !service.sessionList.containsKey("aria2_daemon")) {
                     val dummyView = com.termux.view.TerminalView(this@MainActivity, null)
                     val client = TerminalBackEnd(dummyView, this@MainActivity)
+                    val sessionFile = File(this@MainActivity.filesDir, "aria2.session").absolutePath
                     sessionBinder?.createSession(
                         "aria2_daemon",
                         client,
                         this@MainActivity,
                         WorkingMode.ALPINE,
-                        initialArgs = listOf("sh", "-c", "aria2c --daemon=false --enable-rpc=true --rpc-listen-all=false --rpc-listen-port=${Settings.aria2RpcPort} --async-dns=false")
+                        initialArgs = listOf("sh", "-c", "touch $sessionFile && aria2c --daemon=false --enable-rpc=true --rpc-listen-all=false --rpc-listen-port=${Settings.aria2RpcPort} --async-dns=false --save-session=$sessionFile --input-file=$sessionFile --save-session-interval=30")
                     )
                 }
             }
@@ -173,6 +174,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLink(intent: Intent) {
+        if (intent.getBooleanExtra("GO_TO_DOWNLOADS", false)) {
+            com.rk.terminal.ui.screens.home.NavigationState.selectedTab = 2
+        }
+
         val data = intent.data ?: return
         if (data.scheme != "hydralauncher") return
 

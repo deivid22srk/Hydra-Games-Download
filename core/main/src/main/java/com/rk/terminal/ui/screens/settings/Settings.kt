@@ -36,8 +36,15 @@ import com.rk.terminal.ui.activities.terminal.MainActivity
 import com.rk.terminal.ui.components.SettingsToggle
 import com.rk.terminal.ui.routes.MainActivityRoutes
 import androidx.core.net.toUri
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.SettingsSystemDaydream
 import androidx.compose.material.icons.filled.Source
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Terminal
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -88,53 +95,57 @@ object InputMode {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActivity: MainActivity) {
+fun Settings(modifier: Modifier = Modifier, navController: NavController, mainActivity: MainActivity) {
     val context = LocalContext.current
     var selectedOption by remember { mutableIntStateOf(Settings.working_Mode) }
     var selectedInputMode by remember { mutableIntStateOf(Settings.input_mode) }
+    var showApiKeyDialog by remember { mutableStateOf(false) }
 
     PreferenceLayout(label = stringResource(strings.settings)) {
-        PreferenceGroup(heading = stringResource(strings.default_working_mode)) {
-
+        // --- SEÇÃO HYDRA ---
+        PreferenceGroup(heading = "Hydra Launcher") {
             SettingsCard(
-                title = { Text("Alpine") },
-                description = {Text(stringResource(strings.alpine_desc))},
+                title = { Text("Fontes Hydra") },
+                description = { Text("Gerenciar links de API e fontes de download") },
                 startWidget = {
-                    RadioButton(
-                        modifier = Modifier.padding(start = 8.dp),
-                        selected = selectedOption == WorkingMode.ALPINE,
-                        onClick = {
-                            selectedOption = WorkingMode.ALPINE
-                            Settings.working_Mode = selectedOption
-                        })
+                    Icon(imageVector = Icons.Default.Source, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                endWidget = {
+                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
                 },
                 onClick = {
-                    selectedOption = WorkingMode.ALPINE
-                    Settings.working_Mode = selectedOption
-                })
-
+                    navController.navigate(MainActivityRoutes.HydraSources.route)
+                }
+            )
 
             SettingsCard(
-                title = { Text("Android") },
-                description = {Text(stringResource(strings.android_desc))},
+                title = { Text("SteamGridDB API Key") },
+                description = { Text(if (Settings.steamGridDbApiKey.isEmpty()) "Não configurado" else "Configurado") },
                 startWidget = {
-                    RadioButton(
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            ,
-                        selected = selectedOption == WorkingMode.ANDROID,
-                        onClick = {
-                            selectedOption = WorkingMode.ANDROID
-                            Settings.working_Mode = selectedOption
-                        })
+                    Icon(imageVector = Icons.Default.Key, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
                 },
                 onClick = {
-                    selectedOption = WorkingMode.ANDROID
-                    Settings.working_Mode = selectedOption
-                })
+                    showApiKeyDialog = true
+                }
+            )
         }
 
-        PreferenceGroup(heading = "Download") {
+        // --- SEÇÃO DOWNLOADS ---
+        PreferenceGroup(heading = "Downloads") {
+            SettingsCard(
+                title = { Text("Configurações Aria2") },
+                description = { Text("RPC, limites de velocidade e automação") },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                endWidget = {
+                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
+                },
+                onClick = {
+                    navController.navigate(MainActivityRoutes.Aria2Settings.route)
+                }
+            )
+
             SettingsCard(
                 title = { Text("Pasta de Download") },
                 description = { Text(Settings.downloadPath) },
@@ -145,74 +156,101 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
                     navController.navigate(MainActivityRoutes.FolderPicker.route)
                 }
             )
+        }
+
+        // --- SEÇÃO TERMINAL ---
+        PreferenceGroup(heading = "Terminal") {
             SettingsCard(
-                title = { Text("Configurações Aria2") },
-                description = { Text("Configurar RPC, conexões e mais") },
-                endWidget = {
-                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
+                title = { Text("Modo de Operação") },
+                description = { Text(if (selectedOption == WorkingMode.ALPINE) "Alpine Linux" else "Android Shell") },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.Terminal, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
                 },
                 onClick = {
-                    navController.navigate(MainActivityRoutes.Aria2Settings.route)
+                    selectedOption = if (selectedOption == WorkingMode.ALPINE) WorkingMode.ANDROID else WorkingMode.ALPINE
+                    Settings.working_Mode = selectedOption
+                }
+            )
+
+            SettingsCard(
+                title = { Text(stringResource(strings.input_mode)) },
+                description = {
+                    val modeText = when (selectedInputMode) {
+                        InputMode.DEFAULT -> stringResource(strings.input_mode_default)
+                        InputMode.TYPE_NULL -> stringResource(strings.input_mode_type_null)
+                        InputMode.VISIBLE_PASSWORD -> stringResource(strings.input_mode_visible_password)
+                        else -> ""
+                    }
+                    Text(modeText)
+                },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.Build, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                onClick = {
+                    selectedInputMode = (selectedInputMode + 1) % 3
+                    Settings.input_mode = selectedInputMode
+                }
+            )
+
+            SettingsToggle(
+                label = stringResource(strings.seccomp),
+                description = stringResource(strings.seccomp_desc),
+                showSwitch = true,
+                default = Settings.seccomp,
+                sideEffect = {
+                    Settings.seccomp = it
                 }
             )
         }
 
-        PreferenceGroup(heading = stringResource(strings.input_mode)) {
-
+        // --- SEÇÃO INTERFACE ---
+        PreferenceGroup(heading = "Interface") {
             SettingsCard(
-                title = { Text(stringResource(strings.input_mode_default)) },
-                description = { Text(stringResource(strings.input_mode_default_desc)) },
+                title = { Text(stringResource(strings.customizations)) },
+                description = { Text("Temas, cores e transparência") },
                 startWidget = {
-                    RadioButton(
-                        modifier = Modifier.padding(start = 8.dp),
-                        selected = selectedInputMode == InputMode.DEFAULT,
-                        onClick = {
-                            selectedInputMode = InputMode.DEFAULT
-                            Settings.input_mode = selectedInputMode
-                        })
+                    Icon(imageVector = Icons.Default.ColorLens, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                endWidget = {
+                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
                 },
                 onClick = {
-                    selectedInputMode = InputMode.DEFAULT
-                    Settings.input_mode = selectedInputMode
-                })
-
-            SettingsCard(
-                title = { Text(stringResource(strings.input_mode_type_null)) },
-                description = { Text(stringResource(strings.input_mode_type_null_desc)) },
-                startWidget = {
-                    RadioButton(
-                        modifier = Modifier.padding(start = 8.dp),
-                        selected = selectedInputMode == InputMode.TYPE_NULL,
-                        onClick = {
-                            selectedInputMode = InputMode.TYPE_NULL
-                            Settings.input_mode = selectedInputMode
-                        })
-                },
-                onClick = {
-                    selectedInputMode = InputMode.TYPE_NULL
-                    Settings.input_mode = selectedInputMode
-                })
-
-            SettingsCard(
-                title = { Text(stringResource(strings.input_mode_visible_password)) },
-                description = { Text(stringResource(strings.input_mode_visible_password_desc)) },
-                startWidget = {
-                    RadioButton(
-                        modifier = Modifier.padding(start = 8.dp),
-                        selected = selectedInputMode == InputMode.VISIBLE_PASSWORD,
-                        onClick = {
-                            selectedInputMode = InputMode.VISIBLE_PASSWORD
-                            Settings.input_mode = selectedInputMode
-                        })
-                },
-                onClick = {
-                    selectedInputMode = InputMode.VISIBLE_PASSWORD
-                    Settings.input_mode = selectedInputMode
-                })
+                    navController.navigate(MainActivityRoutes.Customization.route)
+                }
+            )
         }
 
+        // --- SEÇÃO SISTEMA ---
+        PreferenceGroup(heading = "Sistema") {
+            SettingsCard(
+                title = { Text(stringResource(strings.all_file_access)) },
+                description = { Text("Gerenciar permissões de arquivo") },
+                startWidget = {
+                    Icon(imageVector = Icons.Default.Storage, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
+                },
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        runCatching {
+                            val intent = Intent(
+                                android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                "package:${context.packageName}".toUri()
+                            )
+                            context.startActivity(intent)
+                        }.onFailure {
+                            val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                            context.startActivity(intent)
+                        }
+                    } else {
+                        val intent = Intent(
+                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            "package:${context.packageName}".toUri()
+                        )
+                        context.startActivity(intent)
+                    }
+                }
+            )
+        }
 
-        var showApiKeyDialog by remember { mutableStateOf(false) }
         if (showApiKeyDialog) {
             var apiKey by remember { mutableStateOf(Settings.steamGridDbApiKey) }
             AlertDialog(
@@ -240,81 +278,6 @@ fun Settings(modifier: Modifier = Modifier,navController: NavController,mainActi
                     }
                 }
             )
-        }
-
-        PreferenceGroup(heading = "SteamGridDB") {
-            SettingsCard(
-                title = { Text("SteamGridDB API Key") },
-                description = { Text(if (Settings.steamGridDbApiKey.isEmpty()) "Não configurado" else "Configurado") },
-                onClick = {
-                    showApiKeyDialog = true
-                }
-            )
-        }
-
-        PreferenceGroup(heading = "Hydra") {
-            SettingsCard(
-                title = { Text("Fontes Hydra") },
-                description = { Text("Gerenciar links de API do Hydra Launcher") },
-                startWidget = {
-                    Icon(imageVector = Icons.Default.Source, contentDescription = null, modifier = Modifier.padding(start = 16.dp))
-                },
-                endWidget = {
-                    Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, modifier = Modifier.padding(16.dp))
-                },
-                onClick = {
-                    navController.navigate(MainActivityRoutes.HydraSources.route)
-                }
-            )
-
-            SettingsToggle(
-                label = stringResource(strings.customizations),
-                showSwitch = false,
-                default = false,
-                sideEffect = {
-                   navController.navigate(MainActivityRoutes.Customization.route)
-            }, endWidget = {
-                Icon(imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null,modifier = Modifier.padding(16.dp))
-            })
-        }
-
-        PreferenceGroup {
-            SettingsToggle(
-                label = stringResource(strings.seccomp),
-                description = stringResource(strings.seccomp_desc),
-                showSwitch = true,
-                default = Settings.seccomp,
-                sideEffect = {
-                    Settings.seccomp = it
-                })
-
-            SettingsToggle(
-                label = stringResource(strings.all_file_access),
-                description = stringResource(strings.all_file_access_desc),
-                showSwitch = false,
-                default = false,
-                sideEffect = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        runCatching {
-                            val intent = Intent(
-                                android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                                "package:${context.packageName}".toUri()
-                            )
-                            context.startActivity(intent)
-                        }.onFailure {
-                            val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                            context.startActivity(intent)
-                        }
-                    }else{
-                        val intent = Intent(
-                            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            "package:${context.packageName}".toUri()
-                        )
-                        context.startActivity(intent)
-                    }
-
-                })
-
         }
     }
 }

@@ -19,6 +19,7 @@ import androidx.navigation.NavController
 import com.rk.components.compose.preferences.base.PreferenceGroup
 import com.rk.components.compose.preferences.base.PreferenceLayout
 import com.rk.settings.Settings
+import com.rk.terminal.ui.screens.home.DownloadManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +52,7 @@ fun Aria2Settings(navController: NavController) {
     val context = LocalContext.current
 
     PreferenceLayout(label = "Configurações Aria2") {
-        PreferenceGroup(heading = "RPC") {
+        PreferenceGroup(heading = "Conexão RPC") {
             OutlinedTextField(
                 value = rpcSecret,
                 onValueChange = {
@@ -59,7 +60,8 @@ fun Aria2Settings(navController: NavController) {
                     Settings.aria2RpcSecret = it
                 },
                 label = { Text("RPC Secret") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
             OutlinedTextField(
                 value = rpcPort,
@@ -68,20 +70,37 @@ fun Aria2Settings(navController: NavController) {
                     it.toIntOrNull()?.let { port -> Settings.aria2RpcPort = port }
                 },
                 label = { Text("Porta RPC") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
         }
 
-        PreferenceGroup(heading = "Downloads") {
+        PreferenceGroup(heading = "Limites e Performance") {
             OutlinedTextField(
                 value = maxConnections,
                 onValueChange = {
                     maxConnections = it
-                    it.toIntOrNull()?.let { conn -> Settings.aria2MaxConnections = conn }
+                    it.toIntOrNull()?.let { conn ->
+                        Settings.aria2MaxConnections = conn
+                        DownloadManager.updateGlobalOptions()
+                    }
                 },
-                label = { Text("Máximo de Conexões por Servidor") },
-                supportingText = { Text("Padrão: 5") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                label = { Text("Máximo de Conexões/Servidor") },
+                placeholder = { Text("Padrão: 5") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
+            )
+            OutlinedTextField(
+                value = maxDownloadLimit,
+                onValueChange = {
+                    maxDownloadLimit = it
+                    Settings.aria2MaxDownloadLimit = it
+                    DownloadManager.updateGlobalOptions()
+                },
+                label = { Text("Limite de Velocidade") },
+                placeholder = { Text("Ex: 1M, 500K. 0 = ilimitado") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
             OutlinedTextField(
                 value = minSplitSize,
@@ -90,19 +109,13 @@ fun Aria2Settings(navController: NavController) {
                     Settings.aria2MinSplitSize = it
                 },
                 label = { Text("Tamanho Mínimo de Split") },
-                supportingText = { Text("Ex: 20M, 1G. Padrão: 20M") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                placeholder = { Text("Padrão: 20M") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
-            OutlinedTextField(
-                value = maxDownloadLimit,
-                onValueChange = {
-                    maxDownloadLimit = it
-                    Settings.aria2MaxDownloadLimit = it
-                },
-                label = { Text("Limite Máximo de Download") },
-                supportingText = { Text("Ex: 1M, 10K. 0 = ilimitado. Padrão: 0") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+        }
+
+        PreferenceGroup(heading = "Rede") {
             OutlinedTextField(
                 value = userAgent,
                 onValueChange = {
@@ -110,30 +123,8 @@ fun Aria2Settings(navController: NavController) {
                     Settings.aria2UserAgent = it
                 },
                 label = { Text("User Agent") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-
-        PreferenceGroup(heading = "Tentativas e Timeouts") {
-            OutlinedTextField(
-                value = maxTries,
-                onValueChange = {
-                    maxTries = it
-                    it.toIntOrNull()?.let { tries -> Settings.aria2MaxTries = tries }
-                },
-                label = { Text("Máximo de Tentativas") },
-                supportingText = { Text("Padrão: 10") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            OutlinedTextField(
-                value = retryWait,
-                onValueChange = {
-                    retryWait = it
-                    it.toIntOrNull()?.let { wait -> Settings.aria2RetryWait = wait }
-                },
-                label = { Text("Tempo de Espera entre Tentativas (segundos)") },
-                supportingText = { Text("Padrão: 5") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
             OutlinedTextField(
                 value = timeout,
@@ -141,22 +132,33 @@ fun Aria2Settings(navController: NavController) {
                     timeout = it
                     it.toIntOrNull()?.let { time -> Settings.aria2Timeout = time }
                 },
-                label = { Text("Timeout de Conexão (segundos)") },
-                supportingText = { Text("Padrão: 60") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                label = { Text("Timeout de Conexão (s)") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
         }
 
         PreferenceGroup(heading = "Avançado") {
+            OutlinedTextField(
+                value = maxTries,
+                onValueChange = {
+                    maxTries = it
+                    it.toIntOrNull()?.let { tries -> Settings.aria2MaxTries = tries }
+                },
+                label = { Text("Máximo de Tentativas") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
+            )
             OutlinedTextField(
                 value = fileAllocation,
                 onValueChange = {
                     fileAllocation = it
                     Settings.aria2FileAllocation = it
                 },
-                label = { Text("Método de Alocação de Arquivo") },
-                supportingText = { Text("Opções: none, prealloc, falloc. Padrão: none") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                label = { Text("Alocação de Arquivo") },
+                placeholder = { Text("none, prealloc, falloc") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
             OutlinedTextField(
                 value = autoSaveInterval,
@@ -164,9 +166,19 @@ fun Aria2Settings(navController: NavController) {
                     autoSaveInterval = it
                     it.toIntOrNull()?.let { interval -> Settings.aria2AutoSaveInterval = interval }
                 },
-                label = { Text("Intervalo de Auto-Save (segundos)") },
-                supportingText = { Text("Padrão: 60") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                label = { Text("Intervalo de Auto-Save (s)") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
+            )
+            OutlinedTextField(
+                value = retryWait,
+                onValueChange = {
+                    retryWait = it
+                    it.toIntOrNull()?.let { wait -> Settings.aria2RetryWait = wait }
+                },
+                label = { Text("Espera entre tentativas (s)") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = MaterialTheme.shapes.medium
             )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
