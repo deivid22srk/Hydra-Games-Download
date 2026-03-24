@@ -129,8 +129,20 @@ object DownloadManager {
                     val path = it["path"] as? String
                     if (path.isNullOrEmpty()) {
                         val uris = it["uris"] as? List<Map<String, Any>>
-                        uris?.firstOrNull()?.let { (it["uri"] as? String)?.split("/")?.last()?.split("?")?.first() }
-                    } else path.split("/").last()
+                        val rawName = uris?.firstOrNull()?.let { (it["uri"] as? String)?.split("/")?.last()?.split("?")?.first() }
+                        try {
+                            if (rawName != null) java.net.URLDecoder.decode(rawName, "UTF-8") else null
+                        } catch (e: Exception) {
+                            rawName
+                        }
+                    } else {
+                        val name = path.split("/").last()
+                        try {
+                            java.net.URLDecoder.decode(name, "UTF-8")
+                        } catch (e: Exception) {
+                            name
+                        }
+                    }
                 } ?: "Download Aria2"
 
                 val progress = if (totalLen > 0) completedLen.toFloat() / totalLen else 0f
