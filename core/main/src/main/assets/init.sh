@@ -11,7 +11,7 @@ fi
 export PS1="\[\e[38;5;46m\]\u\[\033[39m\]@reterm \[\033[39m\]\w \[\033[0m\]\\$ "
 # shellcheck disable=SC2034
 export PIP_BREAK_SYSTEM_PACKAGES=1
-required_packages="bash gcompat glib nano"
+required_packages="bash gcompat glib nano python3"
 missing_packages=""
 for pkg in $required_packages; do
     if ! apk info -e $pkg >/dev/null 2>&1; then
@@ -39,6 +39,8 @@ if [ "$#" -eq 0 ]; then
     export PS1="\[\e[38;5;46m\]\u\[\033[39m\]@reterm \[\033[39m\]\w \[\033[0m\]\\$ "
     cd $HOME
     /bin/ash
+elif [ "$1" = "exit" ]; then
+    exit 0
 else
     exec "$@"
 fi

@@ -20,4 +20,9 @@ object Rootfs {
     fun isFilesDownloaded(): Boolean{
         return reTerminal.exists() && reTerminal.child("proot").exists() && reTerminal.child("libtalloc.so.2").exists() && reTerminal.child("alpine.tar.gz").exists()
     }
+
+    var isFullyInstalled = mutableStateOf(isFullyInstalled())
+    fun isFullyInstalled(): Boolean {
+        return isFilesDownloaded() && reTerminal.child(".installed").exists()
+    }
 }
