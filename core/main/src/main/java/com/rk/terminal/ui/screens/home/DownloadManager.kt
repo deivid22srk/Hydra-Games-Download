@@ -28,6 +28,7 @@ data class DownloadProgress(
     val totalSize: String = "",
     val isCompleted: Boolean = false,
     val isPaused: Boolean = false,
+    val isError: Boolean = false,
     val filePath: String? = null
 )
 
@@ -151,6 +152,7 @@ object DownloadManager {
 
                 val isPaused = statusAttr == "paused" || statusAttr == "waiting"
                 val isCompleted = statusAttr == "complete"
+                val isError = statusAttr == "error"
 
                 val existingIndex = activeDownloads.indexOfFirst { (it.gid != null && it.gid == gid) || it.id == gid }
                 val updatedDownload = if (existingIndex != -1) {
@@ -172,6 +174,7 @@ object DownloadManager {
                         totalSize = sizeStr,
                         isPaused = isPaused,
                         isCompleted = isCompleted,
+                        isError = isError,
                         filePath = fullPath
                     )
                 } else {
@@ -180,11 +183,12 @@ object DownloadManager {
                         gid = gid,
                         title = fileName,
                         progress = progress,
-                        status = if (isPaused) "Pausado" else if (isCompleted) "Concluído" else "Adicionado",
+                        status = if (isPaused) "Pausado" else if (isCompleted) "Concluído" else if (isError) "Erro no download" else "Adicionado",
                         speed = speedStr,
                         totalSize = sizeStr,
                         isPaused = isPaused,
                         isCompleted = isCompleted,
+                        isError = isError,
                         filePath = fullPath
                     )
                 }
