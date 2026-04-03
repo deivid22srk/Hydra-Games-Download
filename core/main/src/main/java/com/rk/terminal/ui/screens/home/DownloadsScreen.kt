@@ -61,12 +61,17 @@ fun DownloadsScreen() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = when {
+                                    download.isError -> Icons.Default.Error
                                     download.isCompleted -> Icons.Default.DownloadDone
                                     download.isPaused -> Icons.Default.PlayArrow
                                     else -> Icons.Default.Download
                                 },
                                 contentDescription = null,
-                                tint = if (download.isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                tint = when {
+                                    download.isError -> MaterialTheme.colorScheme.error
+                                    download.isCompleted -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.secondary
+                                }
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
@@ -76,7 +81,7 @@ fun DownloadsScreen() {
                                 modifier = Modifier.weight(1f)
                             )
 
-                            if (!download.isCompleted && download.gid != null) {
+                            if (!download.isCompleted && !download.isError && download.gid != null) {
                                 Row {
                                     IconButton(onClick = {
                                         val targetGid = download.gid
@@ -96,7 +101,7 @@ fun DownloadsScreen() {
                                         Icon(Icons.Default.Delete, contentDescription = null)
                                     }
                                 }
-                            } else if (download.isCompleted || download.gid == null) {
+                            } else if (download.isCompleted || download.isError || download.gid == null) {
                                 IconButton(onClick = {
                                     showDeleteDialog = download
                                 }) {
@@ -107,7 +112,7 @@ fun DownloadsScreen() {
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        if (!download.isCompleted) {
+                        if (!download.isCompleted && !download.isError) {
                             LinearProgressIndicator(
                                 progress = { download.progress },
                                 modifier = Modifier.fillMaxWidth(),
@@ -172,7 +177,7 @@ fun DownloadsScreen() {
                     onClick = {
                         val download = showDeleteDialog!!
                         if (download.gid != null) {
-                            if (download.isCompleted) {
+                            if (download.isCompleted || download.isError) {
                                 DownloadManager.removeDownloadResult(download.gid)
                             } else {
                                 DownloadManager.removeDownload(download.gid)
