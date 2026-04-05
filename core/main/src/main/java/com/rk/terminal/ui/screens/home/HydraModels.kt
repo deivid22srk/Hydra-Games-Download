@@ -24,8 +24,17 @@ data class HydraGame(
     @SerializedName("downloadSources") val downloadSources: List<HydraDownloadSource>? = null,
     @SerializedName("playTimeInSeconds") val playTimeInSeconds: Long? = null,
     @SerializedName("lastTimePlayed") val lastTimePlayed: String? = null,
+    @SerializedName("iconUrl") val iconUrl: String? = null,
+    @SerializedName("coverImageUrl") val coverImageUrl: String? = null,
+    @SerializedName("libraryHeroImageUrl") val libraryHeroImageUrl: String? = null,
+    @SerializedName("logoImageUrl") val logoImageUrl: String? = null,
+    @SerializedName("playTimeInMilliseconds") val playTimeInMilliseconds: Double? = null,
     var sourceName: String? = null
-)
+) {
+    override fun toString(): String {
+        return "HydraGame(title='$title', shop='$shop', objectId='$objectId')"
+    }
+}
 
 data class HydraSource(
     @SerializedName("name") val name: String? = null,

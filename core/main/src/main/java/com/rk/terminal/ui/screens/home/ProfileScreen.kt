@@ -182,7 +182,23 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                     client.newCall(friendRequestsReq).execute().use { response ->
                         if (response.isSuccessful) {
                             val body = response.body?.string()
-                            friendRequests = gson.fromJson(body, HydraFriendRequestsResponse::class.java)
+                            // API may return either an array directly or a wrapped object
+                            try {
+                                val incomingRequests = try {
+                                    gson.fromJson(body, object : TypeToken<List<HydraFriendRequest>>() {}.type)
+                                        ?: emptyList()
+                                } catch (e: Exception) {
+                                    // Fallback: try parsing as wrapped object { "incoming": [...] }
+                                    val wrappedResponse = gson.fromJson(body, HydraFriendRequestsResponse::class.java)
+                                    wrappedResponse?.incoming ?: emptyList()
+                                }
+                                if (incomingRequests.isNotEmpty()) {
+                                    friendRequests = HydraFriendRequestsResponse(incoming = incomingRequests)
+                                }
+                            } catch (e: Exception) {
+                                // Ignore friend request parse errors
+                                android.util.Log.e("ProfileScreen", "Error parsing friend requests", e)
+                            }
                         }
                     }
                 }

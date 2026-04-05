@@ -53,8 +53,7 @@ fun LibraryScreen(navController: NavController, viewModel: SharedGameViewModel) 
                 // Revalidate session first in case token is expiring
                 HydraApi.revalidateSession()
 
-                val userId = Settings.userId
-                if (userId.isBlank() || Settings.accessToken.isBlank()) {
+                if (Settings.accessToken.isBlank()) {
                     loginRequired = true
                     libraryGames = emptyList()
                     withContext(Dispatchers.Main) { isLoading = false }
@@ -63,22 +62,22 @@ fun LibraryScreen(navController: NavController, viewModel: SharedGameViewModel) 
 
                 val client = HydraApi.getClient()
                 val gson = Gson()
-                // API requires 'take' query parameter — without it returns 400 "Expected number, received nan"
-                val url = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library?take=1000"
+                // Use /profile/games endpoint (same as HydraPc) — returns all games without pagination
+                val url = "https://hydra-api-us-east-1.losbroxas.org/profile/games"
                 val request = Request.Builder().url(url).build()
 
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: ""
-                        // Try parsing as { "library": [...] } format first
+                        // /profile/games returns a direct array of ProfileGame objects
                         val games = try {
-                            val libraryJson = com.google.gson.JsonParser.parseString(body).asJsonObject.get("library")
-                            gson.fromJson(libraryJson, object : TypeToken<List<HydraGame>>() {}.type)
+                            gson.fromJson(body, object : TypeToken<List<HydraGame>>() {}.type)
                                 ?: emptyList<HydraGame>()
                         } catch (e: Exception) {
-                            // Fallback: try parsing the response as a direct list
+                            // Fallback: try parsing as { "library": [...] } format
                             try {
-                                gson.fromJson(body, object : TypeToken<List<HydraGame>>() {}.type)
+                                val libraryJson = com.google.gson.JsonParser.parseString(body).asJsonObject.get("library")
+                                gson.fromJson(libraryJson, object : TypeToken<List<HydraGame>>() {}.type)
                                     ?: emptyList<HydraGame>()
                             } catch (e2: Exception) {
                                 emptyList<HydraGame>()
