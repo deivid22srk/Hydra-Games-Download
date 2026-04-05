@@ -14,7 +14,24 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.matchParentSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -917,6 +934,7 @@ private fun CopyIdChip(id: String, clipboard: androidx.compose.ui.platform.Clipb
    STATS
    ============================================================ */
 @Composable
+@Composable
 private fun StatCardsRow(playTime: String, achievements: Int, karma: Int) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         StatCard(Icons.Default.EmojiEvents, "$achievements", "Conquistas")
@@ -926,7 +944,7 @@ private fun StatCardsRow(playTime: String, achievements: Int, karma: Int) {
 }
 
 @Composable
-private fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
+private fun RowScope.StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
     Surface(modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLowest, tonalElevation = 1.dp) {
         Column(horizontalAlignment = Alignment.CenterHorizontally,
