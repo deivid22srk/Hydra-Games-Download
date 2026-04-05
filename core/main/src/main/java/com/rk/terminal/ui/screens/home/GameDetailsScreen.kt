@@ -173,7 +173,7 @@ fun GameDetailsScreen(
                     // Check if already in library
                     val userId = Settings.userId
                     if (userId.isNotBlank()) {
-                        val libUrl = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library"
+                        val libUrl = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library?take=1000"
                         client.newCall(Request.Builder().url(libUrl).build()).execute().use { response ->
                             if (response.isSuccessful) {
                                 val body = response.body?.string()
@@ -274,17 +274,22 @@ fun GameDetailsScreen(
                     val client = HydraApi.getClient()
                     val gson = Gson()
 
+                    // Match PC API format: PUT /profile/games/{shop}/{objectId}
+                    // with playTimeDeltaInSeconds (required number) and lastTimePlayed (valid ISO date)
+                    val nowIso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+                        timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    }.format(java.util.Date())
+
                     val body = mapOf(
-                        "objectId" to gameObjectId,
-                        "shop" to gameShop,
-                        "playTimeInMilliseconds" to 0,
-                        "lastTimePlayed" to null
+                        "playTimeDeltaInSeconds" to 0,
+                        "lastTimePlayed" to nowIso
                     )
 
                     val requestBody = gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull())
+                    val url = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$gameShop/$gameObjectId"
                     val request = Request.Builder()
-                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
-                        .post(requestBody)
+                        .url(url)
+                        .put(requestBody)
                         .build()
 
                     client.newCall(request).execute().use { response ->
@@ -295,42 +300,24 @@ fun GameDetailsScreen(
                                 android.util.Log.d("LibraryAdd", "Game added: objectId=$gameObjectId, shop=$gameShop")
                             }
                         } else {
-                            // Try the PUT variant used for synchronization/tracking
-                            val syncUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$gameShop/$gameObjectId"
-                            val bodyStr = gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull())
-                            val syncRequest = Request.Builder()
-                                .url(syncUrl)
-                                .put(bodyStr)
-                                .build()
+                            val errorBody = response.body?.string()?.take(300)
+                            val httpCode = response.code
+                            android.util.Log.e("LibraryAdd", "Failed with $httpCode: $errorBody (request: shop=$gameShop, objectId=$gameObjectId)")
 
-                            client.newCall(syncRequest).execute().use { syncResponse ->
-                                withContext(Dispatchers.Main) {
-                                    if (syncResponse.isSuccessful) {
-                                        isAlreadyInLibrary = true
-                                        android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
-                                        android.util.Log.d("LibraryAdd", "Game added (PUT): objectId=$gameObjectId, shop=$gameShop")
-                                    } else {
-                                        val errorBody = syncResponse.body?.string() ?: "Erro desconhecido"
-                                        val httpCode = syncResponse.code
-                                        android.util.Log.e("LibraryAdd", "Failed with $httpCode: $errorBody")
-
-                                        val message = when (httpCode) {
-                                            401 -> "Sessão expirada. Faça login novamente."
-                                            403 -> "Sem permissão para adicionar este jogo."
-                                            404 -> "Jogo não encontrado na API."
-                                            409 -> "Jogo já está na biblioteca."
-                                            else -> "Erro ao adicionar: HTTP $httpCode"
-                                        }
-                                        if (httpCode == 401) {
-                                            Settings.accessToken = ""
-                                            Settings.refreshToken = ""
-                                            Settings.userId = ""
-                                            Settings.tokenExpiration = 0L
-                                        }
-                                        android.widget.Toast.makeText(mainActivity, message, android.widget.Toast.LENGTH_LONG).show()
-                                    }
-                                }
+                            val message = when (httpCode) {
+                                401 -> "Sessão expirada. Faça login novamente."
+                                403 -> "Sem permissão para adicionar este jogo."
+                                404 -> "Jogo não encontrado na API."
+                                409 -> "Jogo já está na biblioteca."
+                                else -> "Erro ao adicionar: HTTP $httpCode"
                             }
+                            if (httpCode == 401) {
+                                Settings.accessToken = ""
+                                Settings.refreshToken = ""
+                                Settings.userId = ""
+                                Settings.tokenExpiration = 0L
+                            }
+                            android.widget.Toast.makeText(mainActivity, message, android.widget.Toast.LENGTH_LONG).show()
                         }
                     }
                 } catch (e: Exception) {

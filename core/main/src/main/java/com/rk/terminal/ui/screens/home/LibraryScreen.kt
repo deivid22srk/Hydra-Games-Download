@@ -63,7 +63,8 @@ fun LibraryScreen(navController: NavController, viewModel: SharedGameViewModel) 
 
                 val client = HydraApi.getClient()
                 val gson = Gson()
-                val url = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library"
+                // API requires 'take' query parameter — without it returns 400 "Expected number, received nan"
+                val url = "https://hydra-api-us-east-1.losbroxas.org/users/$userId/library?take=1000"
                 val request = Request.Builder().url(url).build()
 
                 client.newCall(request).execute().use { response ->
