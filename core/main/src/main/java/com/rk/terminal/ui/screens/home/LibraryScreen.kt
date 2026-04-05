@@ -69,25 +69,18 @@ fun LibraryScreen(navController: NavController, viewModel: SharedGameViewModel) 
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: ""
-                        val data = try {
-                            gson.fromJson(body, object : TypeToken<Map<String, Any>>() {}.type)
-                        } catch (e: JsonSyntaxException) {
-                            null
-                        }
-
-                        val libraryArray = data?.get("library") as? java.util.ArrayList<*>
-
-                        val games = if (libraryArray != null) {
-                            gson.fromJson(
-                                gson.toJson(libraryArray),
-                                object : TypeToken<List<HydraGame>>() {}.type
-                            ) ?: emptyList()
-                        } else {
+                        // Try parsing as { "library": [...] } format first
+                        val games = try {
+                            val libraryJson = com.google.gson.JsonParser.parseString(body).asJsonObject.get("library")
+                            gson.fromJson(libraryJson, object : TypeToken<List<HydraGame>>() {}.type)
+                                ?: emptyList<HydraGame>()
+                        } catch (e: Exception) {
                             // Fallback: try parsing the response as a direct list
                             try {
-                                gson.fromJson(body, object : TypeToken<List<HydraGame>>() {}.type) ?: emptyList()
-                            } catch (e: Exception) {
-                                emptyList()
+                                gson.fromJson(body, object : TypeToken<List<HydraGame>>() {}.type)
+                                    ?: emptyList<HydraGame>()
+                            } catch (e2: Exception) {
+                                emptyList<HydraGame>()
                             }
                         }
 
@@ -279,7 +272,7 @@ fun LibraryGameCard(game: HydraGame, navController: NavController, viewModel: Sh
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Row(verticalAlignment = Alignment.CENTER_VERTICALLY) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(

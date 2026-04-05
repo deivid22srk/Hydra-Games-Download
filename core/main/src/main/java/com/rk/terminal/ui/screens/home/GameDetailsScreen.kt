@@ -257,8 +257,7 @@ fun GameDetailsScreen(
             // Check login state before attempting
             if (Settings.userId.isBlank() || Settings.accessToken.isBlank()) {
                 android.widget.Toast.makeText(mainActivity, "Faça login para adicionar jogos à biblioteca", android.widget.Toast.LENGTH_SHORT).show()
-                return@addToLibrary
-            }
+            } else {
             isAddingToLibrary = true
             scope.launch(Dispatchers.IO) {
                 try {
@@ -343,6 +342,7 @@ fun GameDetailsScreen(
                 } finally {
                     withContext(Dispatchers.Main) { isAddingToLibrary = false }
                 }
+            }
             }
         }
     }
