@@ -354,7 +354,7 @@ fun GameDetailsScreen(
 
                     val client = HydraApi.getClient()
                     // DELETE /profile/games/{objectId} — same as HydraPc
-                    val url = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$objectId"
+                    val url = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$gameObjectId"
                     val request = Request.Builder()
                         .url(url)
                         .delete()
@@ -365,7 +365,7 @@ fun GameDetailsScreen(
                             withContext(Dispatchers.Main) {
                                 isAlreadyInLibrary = false
                                 android.widget.Toast.makeText(mainActivity, "Removido da biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
-                                android.util.Log.d("LibraryRemove", "Game removed: objectId=$objectId, shop=$gameShop")
+                                android.util.Log.d("LibraryRemove", "Game removed: objectId=$gameObjectId, shop=$gameShop")
                             }
                         } else {
                             val errorBody = response.body?.string()?.take(300)
