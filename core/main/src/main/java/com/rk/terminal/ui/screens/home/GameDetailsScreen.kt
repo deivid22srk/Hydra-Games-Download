@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,7 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.TextView
 import androidx.core.text.HtmlCompat
@@ -87,7 +91,13 @@ fun GameDetailsScreen(
     var localRepacks by remember { mutableStateOf<List<LocalRepack>>(emptyList()) }
     var steamDetails by remember { mutableStateOf<Map<String, Any>?>(null) }
     var hydraReviews by remember { mutableStateOf<List<HydraReview>>(emptyList()) }
+    var allReviews by remember { mutableStateOf<List<HydraReview>>(emptyList()) }
+    var totalReviewsCount by remember { mutableStateOf(0) }
+    var hasUserReviewed by remember { mutableStateOf(false) }
+    var reviewSort by remember { mutableStateOf("mostVoted") }
     var showDownloadDialog by remember { mutableStateOf(false) }
+    var showReviewFormDialog by remember { mutableStateOf(false) }
+    var showConfirmDeleteReview by remember { mutableStateOf(false) }
     var isSearchingSources by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
     var isAddingToLibrary by remember { mutableStateOf(false) }
@@ -189,12 +199,21 @@ fun GameDetailsScreen(
                         }
                     }
 
-                    // Hydra Reviews
-                    val reviewsUrl = "$baseUrl/reviews?take=5&skip=0&sortBy=newest"
-                    client.newCall(Request.Builder().url(reviewsUrl).build()).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val reviewsResp = gson.fromJson(response.body?.string(), HydraReviewsResponse::class.java)
-                            hydraReviews = reviewsResp.reviews ?: emptyList()
+                    // Hydra Reviews - initial batch
+                    loadReviews(client, gson, gameShop, gameObjectId, sortBy = reviewSort,
+                        onSuccess = { reviews, total ->
+                            hydraReviews = reviews
+                            allReviews = reviews
+                            totalReviewsCount = total
+                        })
+
+                    // Check if user has reviewed
+                    if (Settings.accessToken.isNotBlank()) {
+                        client.newCall(Request.Builder().url("$baseUrl/reviews/check").build()).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val checkResp = gson.fromJson(response.body?.string(), HydraCheckReviewResponse::class.java)
+                                hasUserReviewed = checkResp.hasReviewed
+                            }
                         }
                     }
 
@@ -398,6 +417,116 @@ fun GameDetailsScreen(
                     withContext(Dispatchers.Main) { isRemovingFromLibrary = false }
                 }
             }
+        }
+    }
+
+    /* ------------ review helpers ------------ */
+    fun loadReviews(
+        client: okhttp3.OkHttpClient,
+        gson: Gson,
+        shop: String?,
+        objectId: String?,
+        sortBy: String,
+        onSuccess: (List<HydraReview>, Int) -> Unit
+    ) {
+        if (shop == null || objectId == null) return
+        val reviewsUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$shop/$objectId/reviews?take=20&skip=0&sortBy=$sortBy"
+        client.newCall(Request.Builder().url(reviewsUrl).build()).execute().use { response ->
+            if (response.isSuccessful) {
+                val reviewsResp = gson.fromJson(response.body?.string(), HydraReviewsResponse::class.java)
+                onSuccess(reviewsResp.reviews ?: emptyList(), reviewsResp.totalCount ?: 0)
+            }
+        }
+    }
+
+    val handleVote = { reviewId: String, isUpvote: Boolean ->
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val url = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId/reviews/$reviewId/${if (isUpvote) "upvote" else "downvote"}"
+                val req = Request.Builder().url(url).put("".toRequestBody()).build()
+                client.newCall(req).execute().use { response ->
+                    if (response.isSuccessful) {
+                        withContext(Dispatchers.Main) {
+                            hydraReviews = hydraReviews.map { r ->
+                                if (r.id == reviewId) {
+                                    val wasUp = r.hasUpvoted == true
+                                    val wasDown = r.hasDownvoted == true
+                                    if (isUpvote) {
+                                        r.copy(
+                                            hasUpvoted = !wasUp,
+                                            hasDownvoted = false,
+                                            upvotes = (r.upvotes ?: 0) + if (!wasUp) 1 else -1,
+                                            downvotes = (r.downvotes ?: 0) - if (wasDown) 1 else 0
+                                        )
+                                    } else {
+                                        r.copy(
+                                            hasDownvoted = !wasDown,
+                                            hasUpvoted = false,
+                                            downvotes = (r.downvotes ?: 0) + if (!wasDown) 1 else -1,
+                                            upvotes = (r.upvotes ?: 0) - if (wasUp) 1 else 0
+                                        )
+                                    }
+                                } else r
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    val handleDeleteReview = { reviewId: String ->
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val url = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId/reviews/$reviewId"
+                val req = Request.Builder().url(url).delete().build()
+                client.newCall(req).execute().use { response ->
+                    if (response.isSuccessful) {
+                        withContext(Dispatchers.Main) {
+                            showConfirmDeleteReview = false
+                            hasUserReviewed = false
+                            loadReviews(HydraApi.getClient(), Gson(), gameShop, gameObjectId, reviewSort) { reviews, total ->
+                                hydraReviews = reviews
+                                allReviews = reviews
+                                totalReviewsCount = total
+                            }
+                            android.widget.Toast.makeText(mainActivity, "Avaliação removida!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    val handleCreateReview = { reviewHtml: String, score: Int ->
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = HydraApi.getClient()
+                val gson = Gson()
+                val body = gson.toJson(HydraReviewCreateRequest(reviewHtml, score)).toRequestBody("application/json".toMediaTypeOrNull())
+                val url = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId/reviews"
+                val req = Request.Builder().url(url).post(body).build()
+                client.newCall(req).execute().use { response ->
+                    if (response.isSuccessful) {
+                        withContext(Dispatchers.Main) {
+                            showReviewFormDialog = false
+                            hasUserReviewed = true
+                            loadReviews(HydraApi.getClient(), Gson(), gameShop, gameObjectId, reviewSort) { reviews, total ->
+                                hydraReviews = reviews
+                                allReviews = reviews
+                                totalReviewsCount = total
+                            }
+                            android.widget.Toast.makeText(mainActivity, "Avaliação enviada!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(mainActivity, "Erro ao enviar avaliação: HTTP ${response.code}", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -627,47 +756,75 @@ fun GameDetailsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Reviews Section
-                if (hydraReviews.isNotEmpty()) {
-                    Text("Avaliações da Comunidade", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    hydraReviews.forEach { review ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                Text("Avaliações da Comunidade", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (totalReviewsCount > 0) "$totalReviewsCount ${if (totalReviewsCount == 1) "avaliação" else "avaliações"}" else "Sem avaliações ainda",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (Settings.accessToken.isNotBlank() && gameObjectId != null && !hasUserReviewed) {
+                        Button(
+                            onClick = { showReviewFormDialog = true },
+                            shape = MaterialTheme.shapes.medium,
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    AsyncImage(
-                                        model = review.user?.profileImageUrl,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(32.dp).clip(androidx.compose.foundation.shape.CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(review.user?.displayName ?: "Usuário Hydra", style = MaterialTheme.typography.labelLarge)
-                                        Row {
-                                            repeat(5) { index ->
-                                                Icon(
-                                                    imageVector = if (index < (review.score ?: 0)) Icons.Default.Star else Icons.Default.StarBorder,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(14.dp),
-                                                    tint = Color(0xFFFFD700)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                AndroidView(
-                                    factory = { context -> TextView(context).apply { textSize = 13f; setTextColor(0xFFEEEEEE.toInt()) } },
-                                    update = { view -> view.text = HtmlCompat.fromHtml(review.reviewHtml ?: "", HtmlCompat.FROM_HTML_MODE_LEGACY) }
-                                )
-                            }
+                            Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Avaliar", style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sort toggle
+                if (hydraReviews.isNotEmpty()) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("newest" to "Mais recentes", "mostVoted" to "Mais votadas").forEach { (sortByVal, label) ->
+                            FilterChip(
+                                selected = reviewSort == sortByVal,
+                                onClick = {
+                                    reviewSort = sortByVal
+                                    scope.launch(Dispatchers.IO) {
+                                        loadReviews(HydraApi.getClient(), Gson(), gameShop, gameObjectId, reviewSort) { reviews, total ->
+                                            hydraReviews = reviews
+                                            allReviews = reviews
+                                            totalReviewsCount = total
+                                        }
+                                    }
+                                },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                if (hydraReviews.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.StarBorder, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Nenhuma avaliação ainda", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                        }
+                    }
+                } else {
+                    hydraReviews.forEach { review ->
+                        val isOwnReview = review.user?.id == Settings.userId
+                        ReviewItem(
+                            review = review,
+                            isOwnReview = isOwnReview,
+                            onUpvote = { handleVote(it, true) },
+                            onDownvote = { handleVote(it, false) },
+                            onDelete = { handleDeleteReview(it) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Media Gallery
                 val screenshots = steamDetails?.get("screenshots") as? List<Map<String, Any>>
@@ -802,6 +959,255 @@ fun GameDetailsScreen(
             }
         }
     }
+
+    /* ------------ review form dialog ------------ */
+    if (showReviewFormDialog) {
+        ReviewFormDialog(
+            onDismiss = { showReviewFormDialog = false },
+            onSubmit = handleCreateReview
+        )
+    }
+
+    /* ------------ confirm delete review dialog ------------ */
+    if (showConfirmDeleteReview) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDeleteReview = false },
+            title = { Text("Remover avaliação") },
+            text = { Text("Tem certeza que deseja remover sua avaliação deste jogo? Esta ação não pode ser desfeita.") },
+            confirmButton = {
+                Button(onClick = {
+                    // find the user's review for this game
+                    val myReview = hydraReviews.find { it.user?.id == Settings.userId }
+                    if (myReview?.id != null) handleDeleteReview(myReview.id)
+                    else showConfirmDeleteReview = false
+                }, colors = ButtonDefaults.buttonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Text("Remover")
+                }
+            },
+            dismissButton = { TextButton(onClick = { showConfirmDeleteReview = false }) { Text("Cancelar") } }
+        )
+    }
+}
+
+@Composable
+private fun ReviewItem(
+    review: HydraReview,
+    isOwnReview: Boolean,
+    onUpvote: (String) -> Unit,
+    onDownvote: (String) -> Unit,
+    onDelete: (String) -> Unit
+) {
+    val reviewId = review.id ?: return
+    val scoreText = when (review.score) {
+        1 -> "Muito Negativa"
+        2 -> "Negativa"
+        3 -> "Neutra"
+        4 -> "Positiva"
+        5 -> "Muito Positiva"
+        else -> ""
+    }
+    val scoreColor = when (review.score) {
+        in 1..2 -> Color(0xFFFF4444)
+        3 -> Color(0xFFFFD700)
+        in 4..5 -> Color(0xFF4CAF50)
+        else -> Color.Unspecified
+    }
+    val playTimeFormatted = (review.playTimeInSeconds ?: 0L).let { s ->
+        val h = s / 3600
+        if (h > 0) "${h}h jogadas" else "${s / 60}min jogadas"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = review.user?.profileImageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(review.user?.displayName ?: "Usuário Hydra", style = MaterialTheme.typography.labelLarge)
+                        if (review.score != null && scoreText.isNotBlank()) {
+                            Surface(shape = RoundedCornerShape(4.dp), color = scoreColor.copy(alpha = 0.15f)) {
+                                Text(scoreText, style = MaterialTheme.typography.labelSmall, color = scoreColor, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                            }
+                        }
+                    }
+                    if (review.playTimeInSeconds != null && review.playTimeInSeconds > 0) {
+                        Text(playTimeFormatted, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (isOwnReview) {
+                    IconButton(onClick = { onDelete(reviewId) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Remover", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            // Stars display
+            Row {
+                repeat(5) { index ->
+                    Icon(
+                        imageVector = if (index < (review.score ?: 0)) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = Color(0xFFFFD700)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            AndroidView(
+                factory = { context -> TextView(context).apply { textSize = 13f; setTextColor(0xFFEEEEEE.toInt()) } },
+                update = { view -> view.text = HtmlCompat.fromHtml(review.reviewHtml ?: "", HtmlCompat.FROM_HTML_MODE_LEGACY) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            // Vote buttons
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (review.hasUpvoted == true) Color(0xFF4CAF50).copy(alpha = 0.15f) else Color.Transparent,
+                        modifier = Modifier
+                            .clickable { onUpvote(reviewId) }
+                            .padding(4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Útil",
+                                modifier = Modifier.size(16.dp),
+                                tint = if (review.hasUpvoted == true) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("${review.upvotes ?: 0}", style = MaterialTheme.typography.labelSmall,
+                                color = if (review.hasUpvoted == true) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (review.hasDownvoted == true) Color(0xFFFF4444).copy(alpha = 0.15f) else Color.Transparent,
+                        modifier = Modifier
+                            .clickable { onDownvote(reviewId) }
+                            .padding(4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.StarBorder,
+                                contentDescription = "Não útil",
+                                modifier = Modifier.size(16.dp),
+                                tint = if (review.hasDownvoted == true) Color(0xFFFF4444) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("${review.downvotes ?: 0}", style = MaterialTheme.typography.labelSmall,
+                                color = if (review.hasDownvoted == true) Color(0xFFFF4444) else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewFormDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (String, Int) -> Unit
+) {
+    var reviewText by remember { mutableStateOf("") }
+    var score by remember { mutableStateOf(0) }
+    val maxChars = 1000
+    val remaining = maxChars - reviewText.length
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Avaliar este jogo", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                // Score selector
+                Text("Sua nota:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    (1..5).forEach { s ->
+                        val colors = when (s) {
+                            in 1..2 -> listOf(Color(0xFFFF4444), Color(0xFFFF8888))
+                            3 -> listOf(Color(0xFFFFD700), Color(0xFFFFEE88))
+                            in 4..5 -> listOf(Color(0xFF4CAF50), Color(0xFF88CC88))
+                            else -> listOf(Color.Unspecified, Color.Unspecified)
+                        }
+                        val isSelected = score >= s
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "$s estrelas",
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clickable { score = s },
+                            tint = when {
+                                score == s -> colors[0]
+                                isSelected -> colors[1]
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            }
+                        )
+                    }
+                }
+                if (score > 0) {
+                    val scoreWords = when (score) {
+                        1 -> "Muito ruim"
+                        2 -> "Ruim"
+                        3 -> "Neutro"
+                        4 -> "Bom"
+                        5 -> "Ótimo"
+                        else -> ""
+                    }
+                    Text(scoreWords, style = MaterialTheme.typography.bodySmall, color = when (score) {
+                        in 1..2 -> Color(0xFFFF4444)
+                        3 -> Color(0xFFFFD700)
+                        in 4..5 -> Color(0xFF4CAF50)
+                        else -> Color.Unspecified
+                    })
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                // Review text
+                OutlinedTextField(
+                    value = reviewText,
+                    onValueChange = { if (it.length <= maxChars) reviewText = it },
+                    label = { Text("Seu comentário (máx. $maxChars caracteres)") },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
+                    minLines = 3
+                )
+                Text(
+                    "$remaining/$maxChars restantes",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (remaining < 50) Color(0xFFFF4444) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(reviewHtmlToParagraph(reviewText), score) },
+                enabled = score > 0 && reviewText.isNotBlank()
+            ) {
+                Text("Enviar avaliação")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+fun reviewHtmlToParagraph(text: String): String {
+    // Simple paragraph wrapping for basic HTML
+    return text.split("\n\n", "\n")
+        .filter { it.isNotBlank() }
+        .joinToString("") { "<p>${android.text.TextUtils.htmlEncode(it)}</p>\n" }
 }
 
 fun repackerName(repack: HydraRepack): String {

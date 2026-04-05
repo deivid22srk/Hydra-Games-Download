@@ -146,7 +146,21 @@ data class HydraReview(
     @SerializedName("createdAt") val createdAt: String? = null,
     @SerializedName("upvotes") val upvotes: Int? = null,
     @SerializedName("downvotes") val downvotes: Int? = null,
+    @SerializedName("hasUpvoted") val hasUpvoted: Boolean? = null,
+    @SerializedName("hasDownvoted") val hasDownvoted: Boolean? = null,
+    @SerializedName("isBlocked") val isBlocked: Boolean? = null,
+    @SerializedName("playTimeInSeconds") val playTimeInSeconds: Long? = null,
     @SerializedName("user") val user: HydraReviewUser? = null
+)
+
+data class HydraReviewCreateRequest(
+    @SerializedName("reviewHtml") val reviewHtml: String,
+    @SerializedName("score") val score: Int
+)
+
+data class HydraCheckReviewResponse(
+    @SerializedName("hasReviewed") val hasReviewed: Boolean = false,
+    @SerializedName("review") val review: HydraReview? = null
 )
 
 data class HydraReviewsResponse(
