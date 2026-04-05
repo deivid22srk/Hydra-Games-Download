@@ -100,54 +100,20 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                 isLoggedIn = currentLoginState
             }
             
-            // Auto-refresh token if expiring soon (within 10 minutes)
+            // Auto-refresh token if expiring soon (within 5 minutes)
+            // HydraApi's AuthInterceptor handles this on every network request,
+            // so we only proactively refresh when the user is on the profile screen
             if (isLoggedIn && Settings.refreshToken.isNotBlank()) {
                 val timeUntilExpiration = Settings.tokenExpiration - System.currentTimeMillis()
-                if (timeUntilExpiration > 0 && timeUntilExpiration < 600000) { // 10 minutes
+                if (timeUntilExpiration > 0 && timeUntilExpiration < 300000) { // 5 minutes to match PC offset
+                    // Let HydraApi's AuthInterceptor handle it — or trigger proactively if no network calls
                     tokenRefreshIndicator = true
                     withContext(Dispatchers.IO) {
                         try {
-                            val client = HydraApi.getClient()
-                            val gson = Gson()
-                            val requestBody = mapOf("refreshToken" to Settings.refreshToken)
-                            val json = gson.toJson(requestBody)
-                            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
-
-                            val request = Request.Builder()
-                                .url("https://hydra-api-us-east-1.losbroxas.org/auth/refresh")
-                                .post(body)
-                                .build()
-
-                            client.newCall(request).execute().use { response ->
-                                if (response.isSuccessful) {
-                                    val respBody = response.body?.string()
-                                    val data = gson.fromJson(respBody, Map::class.java)
-                                    val newAccessToken = data["accessToken"] as? String
-                                    val newRefreshToken = data["refreshToken"] as? String
-                                    val expiresIn = (data["expiresIn"] as? Number)?.toLong() ?: 0L
-
-                                    if (newAccessToken != null && newRefreshToken != null) {
-                                        Settings.accessToken = newAccessToken
-                                        Settings.refreshToken = newRefreshToken
-                                        Settings.tokenExpiration = System.currentTimeMillis() + (expiresIn * 1000)
-                                        android.util.Log.d("ProfileScreen", "Token refreshed successfully. New expiration: ${Settings.tokenExpiration}")
-                                    }
-                                } else {
-                                    android.util.Log.e("ProfileScreen", "Token refresh failed: ${response.code}")
-                                    if (response.code == 401) {
-                                        // Token refresh failed completely - force logout
-                                        Settings.accessToken = ""
-                                        Settings.refreshToken = ""
-                                        Settings.userId = ""
-                                        Settings.tokenExpiration = 0L
-                                        withContext(Dispatchers.Main) {
-                                            isLoggedIn = false
-                                        }
-                                    }
-                                }
-                            }
+                            HydraApi.revalidateSession()
+                            android.util.Log.d("ProfileScreen", "Token revalidated. New expiration: ${Settings.tokenExpiration}")
                         } catch (e: Exception) {
-                            android.util.Log.e("ProfileScreen", "Token refresh error", e)
+                            android.util.Log.e("ProfileScreen", "Token revalidation error", e)
                         } finally {
                             withContext(Dispatchers.Main) {
                                 tokenRefreshIndicator = false

@@ -75,10 +75,12 @@ object HydraApi {
                     } else false
                 } else {
                     if (response.code == 401 || response.code == 403) {
-                        // Refresh token is invalid/expired, log out
+                        // Refresh token is invalid/expired, fully log out
+                        // Must clear ALL auth fields including tokenExpiration to prevent stale state
                         Settings.accessToken = ""
                         Settings.refreshToken = ""
                         Settings.userId = ""
+                        Settings.tokenExpiration = 0L
                     }
                     false
                 }
