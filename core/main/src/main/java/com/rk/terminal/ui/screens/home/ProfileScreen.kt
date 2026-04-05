@@ -14,7 +14,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -438,8 +451,10 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                             android.util.Log.e("ProfileScreen", "upload failed", e)
                                         }
                                         override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                                            withContext(Dispatchers.Main) {
-                                                if (response.isSuccessful) {
+                                            val isSuccess = response.isSuccessful
+                                            response.close()
+                                            scope.launch(Dispatchers.Main) {
+                                                if (isSuccess) {
                                                     val newImageUrl = profileImgUrl ?: bgImgUrl
                                                     if (newImageUrl != null) {
                                                         val patchKey = if (cropType == "avatar") "profileImageUrl" else "backgroundImageUrl"
