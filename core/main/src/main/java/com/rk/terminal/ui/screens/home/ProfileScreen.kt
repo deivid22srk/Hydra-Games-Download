@@ -442,9 +442,8 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                                 if (response.isSuccessful) {
                                                     val newImageUrl = profileImgUrl ?: bgImgUrl
                                                     if (newImageUrl != null) {
-                                                        val patchBody = gson.toJson(mapOf(
-                                                            if (cropType == "avatar") "profileImageUrl" else "backgroundImageUrl" to newImageUrl
-                                                        ))
+                                                        val patchKey = if (cropType == "avatar") "profileImageUrl" else "backgroundImageUrl"
+                                                        val patchBody = gson.toJson(mapOf(patchKey to newImageUrl))
                                                         scope.launch(Dispatchers.IO) {
                                                             try {
                                                                 val patchReq = Request.Builder()
@@ -596,7 +595,7 @@ private fun CropImageDialog(
 
                                 // Dimmed overlay
                                 drawRect(
-                                    color = Color(0, 0, 0, 0.6f),
+                                    color = Color(0f, 0f, 0f, 0.6f),
                                     topLeft = Offset(0f, 0f),
                                     size = size
                                 )
@@ -650,17 +649,13 @@ private fun CropImageDialog(
                         Button(
                             onClick = {
                                 val b = bitmap ?: return@Button
-                                val cropSizePx = getBitmapCropSize(b.width, b.height)
-                                val scaled = Bitmap.createBitmap(
-                                    b,
-                                    max(0, (b.width / 2 - cropSizePx / 2 / scale - offsetX / scale).toInt()),
-                                    max(0, (b.height / 2 - cropSizePx / 2 / scale - offsetY / scale).toInt()),
-                                    min(cropSizePx / scale.toInt().coerceAtLeast(1), max(1, b.width - max(0, (b.width / 2 - cropSizePx / 2 / scale - offsetX / scale).toInt()))),
-                                    min(cropSizePx / scale.toInt().coerceAtLeast(1), max(1, b.height - max(0, (b.height / 2 - cropSizePx / 2 / scale - offsetY / scale).toInt())))
-                                )
+                                val side = minOf(b.width, b.height)
+                                val x = (b.width - side) / 2
+                                val y = (b.height - side) / 2
+                                val cropped = Bitmap.createBitmap(b, x, y, side, side)
                                 val outSize = if (cropType == "avatar") 512 else 1200
-                                val resized = Bitmap.createScaledBitmap(scaled, outSize, outSize, true)
-                                if (scaled != b) scaled.recycle()
+                                val resized = Bitmap.createScaledBitmap(cropped, outSize, outSize, true)
+                                if (cropped != b) cropped.recycle()
                                 val baos = ByteArrayOutputStream()
                                 resized.compress(Bitmap.CompressFormat.PNG, 95, baos)
                                 resized.recycle()
@@ -681,9 +676,9 @@ private fun CropImageDialog(
 }
 
 private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
-    val (height, width) = options to options.run { outHeight to outWidth }.let { (h, w) -> h to w }
+    val outHeight = options.outHeight
+    val outWidth = options.outWidth
     var inSampleSize = 1
-    val (outHeight, outWidth) = height to width
     if (outHeight > reqHeight || outWidth > reqWidth) {
         val halfHeight = outHeight / 2
         val halfWidth = outWidth / 2
@@ -693,8 +688,6 @@ private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int,
     }
     return inSampleSize
 }
-
-private fun getBitmapCropSize(w: Int, h: Int): Int = minOf(w, h)
 
 /* ============================================================
    PROFILE CONTENT (lazy, scrollable)
