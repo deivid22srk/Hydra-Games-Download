@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -497,8 +498,7 @@ private fun ProfileContent(
                     friend = f,
                     onClick = {
                         navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", f.id ?: ""))
-                    },
-                    theme = MaterialTheme.colorScheme
+                    }
                 )
             }
             if (profile.friends.size > 5) {
@@ -701,16 +701,16 @@ private fun StatCardsRow(playTime: String, achievements: Int, karma: Int) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        StatCard(Icons.Default.EmojiEvents, "$achievements", "Conquistas", weight = 1f)
-        StatCard(Icons.Default.History, playTime, "Tempo total", weight = 1f)
-        StatCard(Icons.Default.Star, "$karma", "Karma", weight = 1f)
+        StatCard(Icons.Default.EmojiEvents, "$achievements", "Conquistas", w = 1f)
+        StatCard(Icons.Default.History, playTime, "Tempo total", w = 1f)
+        StatCard(Icons.Default.Star, "$karma", "Karma", w = 1f)
     }
 }
 
 @Composable
-private fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String, weight: Float) {
+private fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String, w: Float) {
     Surface(
-        modifier = Modifier.weight(weight),
+        modifier = Modifier.weight(w),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLowest,
         tonalElevation = 1.dp
@@ -733,7 +733,7 @@ private fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, valu
    FRIENDS
    ============================================================ */
 @Composable
-private fun FriendListItem(friend: HydraFriend, onClick: () -> Unit, theme: MaterialTheme.ColorScheme) {
+private fun FriendListItem(friend: HydraFriend, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -780,8 +780,7 @@ private fun AllFriendsModal(
                         onClick = {
                             onDismiss()
                             navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", f.id ?: ""))
-                        },
-                        theme = MaterialTheme.colorScheme
+                        }
                     )
                 }
             }
