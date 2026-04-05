@@ -219,9 +219,6 @@ fun GameDetailsScreen(
                         }
                     }
 
-                    // Hydra Reviews - initial batch
-                    withContext(Dispatchers.Main) { loadReviews(reviewSort) }
-
                     // Check if user has reviewed
                     if (Settings.accessToken.isNotBlank()) {
                         client.newCall(Request.Builder().url("$baseUrl/reviews/check").build()).execute().use { response ->
@@ -235,7 +232,8 @@ fun GameDetailsScreen(
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
-                    isSearchingSources = false
+                    withContext(Dispatchers.Main) { isSearchingSources = false }
+                    loadReviews(reviewSort)
                 }
             }
         }
@@ -482,10 +480,14 @@ fun GameDetailsScreen(
                 val req = Request.Builder().url(url).delete().build()
                 client.newCall(req).execute().use { response ->
                     if (response.isSuccessful) {
-                        hasUserReviewed = false
-                        showConfirmDeleteReview = false
+                        withContext(Dispatchers.Main) {
+                            hasUserReviewed = false
+                            showConfirmDeleteReview = false
+                        }
                         loadReviews(reviewSort)
-                        android.widget.Toast.makeText(mainActivity, "Avaliação removida!", android.widget.Toast.LENGTH_SHORT).show()
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(mainActivity, "Avaliação removida!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             } catch (e: Exception) { e.printStackTrace() }
@@ -502,15 +504,26 @@ fun GameDetailsScreen(
                 val req = Request.Builder().url(url).post(body).build()
                 client.newCall(req).execute().use { response ->
                     if (response.isSuccessful) {
-                        showReviewFormDialog = false
-                        hasUserReviewed = true
+                        withContext(Dispatchers.Main) {
+                            showReviewFormDialog = false
+                            hasUserReviewed = true
+                        }
                         loadReviews(reviewSort)
-                        android.widget.Toast.makeText(mainActivity, "Avaliação enviada!", android.widget.Toast.LENGTH_SHORT).show()
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(mainActivity, "Avaliação enviada!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     } else {
-                        android.widget.Toast.makeText(mainActivity, "Erro ao enviar avaliação: HTTP ${response.code}", android.widget.Toast.LENGTH_LONG).show()
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(mainActivity, "Erro ao enviar avaliação: HTTP ${response.code}", android.widget.Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(mainActivity, "Falha ao enviar: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                }
+                e.printStackTrace()
+            }
         }
     }
 
