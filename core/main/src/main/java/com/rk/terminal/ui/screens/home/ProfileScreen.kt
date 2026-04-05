@@ -744,13 +744,14 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                                         scope.launch(Dispatchers.IO) {
                                                             try {
                                                                 val client = HydraApi.getClient()
+                                                                val bodyJson = Gson().toJson(mapOf("requestState" to "ACCEPTED"))
                                                                 val acceptRequest = Request.Builder()
-                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}/accept")
-                                                                    .patch("".toRequestBody())
+                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}")
+                                                                    .patch(bodyJson.toRequestBody("application/json".toMediaTypeOrNull()))
                                                                     .build()
                                                                 client.newCall(acceptRequest).execute().use {
                                                                     if (it.isSuccessful) {
-                                                                        refreshProfile()
+                                                                        withContext(Dispatchers.Main) { refreshProfile() }
                                                                     }
                                                                 }
                                                             } catch (e: Exception) { e.printStackTrace() }
@@ -767,13 +768,14 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                                         scope.launch(Dispatchers.IO) {
                                                             try {
                                                                 val client = HydraApi.getClient()
+                                                                val bodyJson = Gson().toJson(mapOf("requestState" to "REFUSED"))
                                                                 val rejectRequest = Request.Builder()
-                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}/refuse")
-                                                                    .patch("".toRequestBody())
+                                                                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}")
+                                                                    .patch(bodyJson.toRequestBody("application/json".toMediaTypeOrNull()))
                                                                     .build()
                                                                 client.newCall(rejectRequest).execute().use {
                                                                     if (it.isSuccessful) {
-                                                                        refreshProfile()
+                                                                        withContext(Dispatchers.Main) { refreshProfile() }
                                                                     }
                                                                 }
                                                             } catch (e: Exception) { e.printStackTrace() }
@@ -791,8 +793,84 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                 }
                             }
                             
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
+
+                        // Solicitações Enviadas (apenas para meu perfil)
+                        if (isMe && !friendRequests?.outgoing.isNullOrEmpty()) {
+                            Text(
+                                text = "Solicitações Enviadas",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 12.dp),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            friendRequests?.outgoing?.forEach { request ->
+                                val target = request.userB
+                                if (target != null) {
+                                    ElevatedCard(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                AsyncImage(
+                                                    model = target.profileImageUrl,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(48.dp).clip(CircleShape),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(
+                                                        text = target.displayName ?: "Usu\u00e1rio",
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "Aguardando resposta...",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch(Dispatchers.IO) {
+                                                        try {
+                                                            val client = HydraApi.getClient()
+                                                            val cancelRequest = Request.Builder()
+                                                                .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}")
+                                                                .delete()
+                                                                .build()
+                                                            client.newCall(cancelRequest).execute().use {
+                                                                if (it.isSuccessful) {
+                                                                    withContext(Dispatchers.Main) { refreshProfile() }
+                                                                }
+                                                            }
+                                                        } catch (e: Exception) { e.printStackTrace() }
+                                                    }
+                                                },
+                                                colors = IconButtonDefaults.iconButtonColors(
+                                                    contentColor = MaterialTheme.colorScheme.error
+                                                )
+                                            ) {
+                                                Icon(Icons.Default.Close, contentDescription = "Cancelar solicitação")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
 
                         if (!profile?.friends.isNullOrEmpty()) {
                             Text(
