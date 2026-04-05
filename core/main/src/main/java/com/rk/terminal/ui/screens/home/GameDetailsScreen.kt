@@ -108,11 +108,12 @@ fun GameDetailsScreen(
     val scope = rememberCoroutineScope()
 
     val loadReviews = { sortBy: String ->
-        if (gameShop == null || gameObjectId == null) return@loadReviews
+        val shop = gameShop ?: return@loadReviews
+        val objId = gameObjectId ?: return@loadReviews
         scope.launch(Dispatchers.IO) {
             val client = HydraApi.getClient()
             val gson = Gson()
-            val reviewsUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId/reviews?take=20&skip=0&sortBy=$sortBy"
+            val reviewsUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$shop/$objId/reviews?take=20&skip=0&sortBy=$sortBy"
             client.newCall(Request.Builder().url(reviewsUrl).build()).execute().use { response ->
                 if (response.isSuccessful) {
                     val reviewsResp = gson.fromJson(response.body?.string(), HydraReviewsResponse::class.java)
