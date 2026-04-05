@@ -3,12 +3,18 @@ package com.rk.terminal.ui.screens.home
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,14 +24,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.navigation.NavController
@@ -38,21 +49,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
 import com.rk.terminal.ui.routes.MainActivityRoutes
-import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,22 +91,16 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
     var isLoggedIn by remember { mutableStateOf(Settings.accessToken.isNotBlank()) }
     var tokenRefreshIndicator by remember { mutableStateOf(false) }
-    
-    // Token refresh and session management
+
     LaunchedEffect(Unit) {
         while(true) {
             val currentLoginState = Settings.accessToken.isNotBlank()
             if (isLoggedIn != currentLoginState) {
                 isLoggedIn = currentLoginState
             }
-            
-            // Auto-refresh token if expiring soon (within 5 minutes)
-            // HydraApi's AuthInterceptor handles this on every network request,
-            // so we only proactively refresh when the user is on the profile screen
             if (isLoggedIn && Settings.refreshToken.isNotBlank()) {
                 val timeUntilExpiration = Settings.tokenExpiration - System.currentTimeMillis()
-                if (timeUntilExpiration > 0 && timeUntilExpiration < 300000) { // 5 minutes to match PC offset
-                    // Let HydraApi's AuthInterceptor handle it — or trigger proactively if no network calls
+                if (timeUntilExpiration > 0 && timeUntilExpiration < 300000) {
                     tokenRefreshIndicator = true
                     withContext(Dispatchers.IO) {
                         try {
@@ -123,18 +116,8 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                     }
                 }
             }
-            
-            delay(30000) // Check every 30 seconds
+            delay(30000)
         }
-    }
-    
-
-    val profileImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { handleImageUpload(it, true, context, scope) { profile = it } }
-    }
-
-    val backgroundImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { handleImageUpload(it, false, context, scope) { profile = it } }
     }
 
     val refreshProfile = {
@@ -143,12 +126,11 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
             try {
                 val client = HydraApi.getClient()
                 val gson = Gson()
-                
-                // Fetch Global Badges
+
                 val badgesRequest = Request.Builder().url("https://hydra-api-us-east-1.losbroxas.org/badges").build()
                 client.newCall(badgesRequest).execute().use { response ->
                     if (response.isSuccessful) {
-                        val type = object : com.google.gson.reflect.TypeToken<List<HydraBadge>>() {}.type
+                        val type = object : TypeToken<List<HydraBadge>>() {}.type
                         globalBadges = gson.fromJson(response.body?.string(), type) ?: emptyList()
                     }
                 }
@@ -169,27 +151,23 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             Settings.updateFromProfile(newProfile)
                         }
                     } else if (response.code == 401) {
-                        // Token might be invalid
                         withContext(Dispatchers.Main) {
                             isLoggedIn = false
                         }
                     }
                 }
-                
-                // Buscar pedidos de amizade se for meu perfil
+
                 if (isMe) {
                     val friendRequestsUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests"
                     val friendRequestsReq = Request.Builder().url(friendRequestsUrl).build()
                     client.newCall(friendRequestsReq).execute().use { response ->
                         if (response.isSuccessful) {
                             val body = response.body?.string()
-                            // API may return either an array directly or a wrapped object
                             try {
                                 val incomingRequests = try {
                                     gson.fromJson(body, object : TypeToken<List<HydraFriendRequest>>() {}.type)
                                         ?: emptyList()
                                 } catch (e: Exception) {
-                                    // Fallback: try parsing as wrapped object { "incoming": [...] }
                                     val wrappedResponse = gson.fromJson(body, HydraFriendRequestsResponse::class.java)
                                     wrappedResponse?.incoming ?: emptyList()
                                 }
@@ -197,7 +175,6 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                     friendRequests = HydraFriendRequestsResponse(incoming = incomingRequests)
                                 }
                             } catch (e: Exception) {
-                                // Ignore friend request parse errors
                                 android.util.Log.e("ProfileScreen", "Error parsing friend requests", e)
                             }
                         }
@@ -206,7 +183,9 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                isLoading = false
+                withContext(Dispatchers.Main) {
+                    isLoading = false
+                }
             }
         }
     }
@@ -232,7 +211,6 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         client.newCall(request).execute().use { response ->
                             if (response.isSuccessful) {
-                                refreshProfile()
                                 withContext(Dispatchers.Main) { isEditing = false }
                             }
                         }
@@ -257,58 +235,12 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
         }
     }
 
-    val formatPlayTime = { seconds: Long ->
+    val formatPlayTime: (Long) -> String = { seconds ->
         val minutes = seconds / 60
-        if (minutes < 60) {
-            "$minutes min"
-        } else {
-            val hours = minutes / 60
-            "${hours}h"
-        }
+        if (minutes < 60) "$minutes min" else "${minutes / 60}h"
     }
 
-    val addFriend = { friendCode: String ->
-        scope.launch(Dispatchers.IO) {
-            try {
-                val client = HydraApi.getClient()
-                val body = Gson().toJson(mapOf("friendCode" to friendCode))
-                    .toRequestBody("application/json".toMediaTypeOrNull())
-                val request = Request.Builder()
-                    .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests")
-                    .post(body)
-                    .build()
-                client.newCall(request).execute().use { }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
-    }
-
-    val reportUser = { reason: String, description: String ->
-        scope.launch(Dispatchers.IO) {
-            try {
-                val client = HydraApi.getClient()
-                val body = Gson().toJson(mapOf("reason" to reason, "description" to description))
-                    .toRequestBody("application/json".toMediaTypeOrNull())
-                val request = Request.Builder()
-                    .url("https://hydra-api-us-east-1.losbroxas.org/users/${profile?.id}/report")
-                    .post(body)
-                    .build()
-                client.newCall(request).execute().use { }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
-    }
-
-    val blockUser = {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val client = HydraApi.getClient()
-                val request = Request.Builder()
-                    .url("https://hydra-api-us-east-1.losbroxas.org/users/${profile?.id}/block")
-                    .post("".toRequestBody())
-                    .build()
-                client.newCall(request).execute().use { }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
-    }
+    /* ---- scaffold body ---- */
 
     Scaffold(
         topBar = {
@@ -342,10 +274,23 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             IconButton(onClick = { showReportDialog = true }) {
                                 Icon(Icons.Default.Report, contentDescription = "Denunciar")
                             }
-                            IconButton(onClick = { blockUser() }) {
+                            IconButton(onClick = {
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        val client = HydraApi.getClient()
+                                        val request = Request.Builder()
+                                            .url("https://hydra-api-us-east-1.losbroxas.org/users/${profile?.id}/block")
+                                            .post("".toRequestBody())
+                                            .build()
+                                        client.newCall(request).execute().use { }
+                                    } catch (e: Exception) { e.printStackTrace() }
+                                }
+                            }) {
                                 Icon(Icons.Default.Block, contentDescription = "Bloquear")
                             }
                         }
+                    } else if (tokenRefreshIndicator) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -366,9 +311,8 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                 if (isLoading) {
                     CircularProgressIndicator()
                 } else {
-                    // Modern Hero Banner com parallax effect
+                    /* ---- Banner ---- */
                     Box(modifier = Modifier.fillMaxWidth().height(280.dp)) {
-                        // Background blur effect
                         AsyncImage(
                             model = profile?.backgroundImageUrl,
                             contentDescription = null,
@@ -376,8 +320,6 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             contentScale = ContentScale.Crop,
                             alpha = 0.4f
                         )
-                        
-                        // Gradient overlay for depth
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -394,57 +336,47 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                     )
                                 )
                         )
-
                         if (isEditing) {
-                            FilledTonalIconButton(
-                                onClick = { backgroundImageLauncher.launch("image/*") },
-                                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
-                            ) {
-                                Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Fundo")
+                            Row(modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                                FilledTonalIconButton(onClick = { /* profile image */ }) {
+                                    Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Foto")
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                FilledTonalIconButton(onClick = { /* background image */ }) {
+                                    Icon(Icons.Default.CameraAlt, contentDescription = "Trocar Fundo")
+                                }
                             }
                         }
 
-                        // Modern floating avatar with glow effect
                         Surface(
-                            modifier = Modifier
-                                .size(130.dp)
-                                .align(Alignment.BottomCenter),
+                            modifier = Modifier.size(130.dp).align(Alignment.BottomCenter),
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface,
-                            border = androidx.compose.foundation.BorderStroke(5.dp, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                            border = BorderStroke(5.dp, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
                             tonalElevation = 8.dp,
                             shadowElevation = 16.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                // Glow ring effect
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(4.dp)
                                         .background(
                                             Brush.radialGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                                    Color.Transparent
-                                                )
+                                                colors = listOf(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), Color.Transparent)
                                             ),
                                             CircleShape
                                         )
                                 )
-                                
                                 AsyncImage(
                                     model = profile?.profileImageUrl,
                                     contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(8.dp)
-                                        .clip(CircleShape),
+                                    modifier = Modifier.fillMaxSize().padding(8.dp).clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
-                                
                                 if (isEditing) {
                                     IconButton(
-                                        onClick = { profileImageLauncher.launch("image/*") },
+                                        onClick = { /* launch profile image chooser */ },
                                         modifier = Modifier.fillMaxSize(),
                                         colors = IconButtonDefaults.iconButtonColors(
                                             containerColor = Color.Black.copy(alpha = 0.6f)
@@ -495,26 +427,14 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                                 ) {
-                                    Text(
-                                        text = id,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 10.sp
-                                    )
+                                    Text(text = id, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "Copiar ID",
-                                        modifier = Modifier.size(12.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Copiar ID", modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(19.dp))
 
                         Text(
                             text = profile?.bio ?: "Nenhuma biografia disponível.",
@@ -526,58 +446,19 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Modern Stats Section with animations
+                        /* ---- Stats ---- */
                         profile?.stats?.let { stats ->
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            Text(
-                                text = "Estat\u00edsticas",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(animationSpec = tween(300, delayMillis = 100))
-                                ) {
-                                    StatCard(
-                                        icon = Icons.Default.EmojiEvents,
-                                        value = "${stats.unlockedAchievementSum ?: 0}",
-                                        label = "Conquistas"
-                                    )
-                                }
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(animationSpec = tween(300, delayMillis = 200))
-                                ) {
-                                    StatCard(
-                                        icon = Icons.Default.History,
-                                        value = formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L),
-                                        label = "Tempo total"
-                                    )
-                                }
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(animationSpec = tween(300, delayMillis = 300))
-                                ) {
-                                    StatCard(
-                                        icon = Icons.Default.Star,
-                                        value = "${profile?.karma ?: 0}",
-                                        label = "Karma"
-                                    )
-                                }
+                                StatCard(Icons.Default.EmojiEvents, "${stats.unlockedAchievementSum ?: 0}", "Conquistas")
+                                StatCard(Icons.Default.History, formatPlayTime(stats.totalPlayTimeInSeconds?.value?.toLong() ?: 0L), "Tempo total")
+                                StatCard(Icons.Default.Star, "${profile?.karma ?: 0}", "Karma")
                             }
                         }
 
-                        // Library Quick Access
+                        /* ---- My Library button ---- */
                         if (isMe) {
                             Button(
                                 onClick = { navController.navigate(MainActivityRoutes.Library.route) },
@@ -592,18 +473,14 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             }
                         }
 
-                        // Recent Games Section
+                        /* ---- Recent Games ---- */
                         if (!profile?.recentGames.isNullOrEmpty()) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Atividade Recente",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
+                                Text(text = "Atividade Recente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                                 TextButton(onClick = { navController.navigate(MainActivityRoutes.Library.route) }) {
                                     Text("Ver Biblioteca", color = MaterialTheme.colorScheme.primary)
                                 }
@@ -620,12 +497,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
-                                            AsyncImage(
-                                                model = game.iconUrl,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
-                                                contentScale = ContentScale.Crop
-                                            )
+                                            AsyncImage(model = game.iconUrl, contentDescription = null, modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                                             Spacer(modifier = Modifier.height(12.dp))
                                             Text(game.title ?: "", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             Text(formatPlayTime(game.playTimeInSeconds ?: 0L), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
@@ -637,34 +509,15 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Badges Section
+                        /* ---- Badges ---- */
                         if (!profile?.badges.isNullOrEmpty()) {
-                            Text(
-                                text = "Emblemas",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp),
-                                textAlign = TextAlign.Start
-                            )
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
+                            Text(text = "Emblemas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 8.dp), textAlign = TextAlign.Start)
+                            LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 items(profile?.badges ?: emptyList()) { badgeName ->
                                     val badgeDef = globalBadges.find { it.name == badgeName }
                                     if (badgeDef != null) {
-                                        Surface(
-                                            modifier = Modifier.size(50.dp),
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            tonalElevation = 2.dp
-                                        ) {
-                                            AsyncImage(
-                                                model = badgeDef.badge?.url,
-                                                contentDescription = badgeDef.title,
-                                                modifier = Modifier.padding(8.dp)
-                                            )
+                                        Surface(modifier = Modifier.size(50.dp), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, tonalElevation = 2.dp) {
+                                            AsyncImage(model = badgeDef.badge?.url, contentDescription = badgeDef.title, modifier = Modifier.padding(8.dp))
                                         }
                                     }
                                 }
@@ -673,35 +526,21 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Pedidos de Amizade Pendentes (apenas para meu perfil)
+                        /* ---- Incoming Friend Requests ---- */
                         if (isMe && !friendRequests?.incoming.isNullOrEmpty()) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 24.dp, bottom = 12.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Solicita\u00e7\u00f5es de Amizade",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.errorContainer,
-                                    modifier = Modifier.size(32.dp)
-                                ) {
+                                Text(text = "Solicitações de Amizade", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.size(32.dp)) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "${friendRequests?.incoming?.size}",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onErrorContainer
-                                        )
+                                        Text(text = "${friendRequests?.incoming?.size}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
                                     }
                                 }
                             }
-                            
+
                             friendRequests?.incoming?.forEach { request ->
                                 val requester = request.userA
                                 if (requester != null) {
@@ -709,47 +548,29 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                AsyncImage(
-                                                    model = requester.profileImageUrl,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(48.dp).clip(CircleShape),
-                                                    contentScale = ContentScale.Crop
-                                                )
+                                        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                AsyncImage(model = requester.profileImageUrl, contentDescription = null, modifier = Modifier.size(48.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 Column {
-                                                    Text(
-                                                        text = requester.displayName ?: "Usu\u00e1rio",
-                                                        style = MaterialTheme.typography.titleSmall,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                    Text(
-                                                        text = "Pedido de amizade",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
+                                                    Text(text = requester.displayName ?: "Usuário", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                    Text(text = "Pedido de amizade", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 }
                                             }
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                FilledTonalIconButton(
+                                                /* Accept */
+                                                Button(
                                                     onClick = {
                                                         scope.launch(Dispatchers.IO) {
                                                             try {
                                                                 val client = HydraApi.getClient()
-                                                                val bodyJson = Gson().toJson(mapOf("requestState" to "ACCEPTED"))
-                                                                val acceptRequest = Request.Builder()
+                                                                val body = Gson().toJson(mapOf("requestState" to "ACCEPTED"))
+                                                                    .toRequestBody("application/json".toMediaTypeOrNull())
+                                                                val req = Request.Builder()
                                                                     .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}")
-                                                                    .patch(bodyJson.toRequestBody("application/json".toMediaTypeOrNull()))
+                                                                    .patch(body)
                                                                     .build()
-                                                                client.newCall(acceptRequest).execute().use {
+                                                                client.newCall(req).execute().use {
                                                                     if (it.isSuccessful) {
                                                                         withContext(Dispatchers.Main) { refreshProfile() }
                                                                     }
@@ -757,54 +578,46 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                                             } catch (e: Exception) { e.printStackTrace() }
                                                         }
                                                     },
-                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                                                    )
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                                 ) {
-                                                    Icon(Icons.Default.Check, contentDescription = "Aceitar")
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
+                                                    Text("Aceitar", color = Color.White)
                                                 }
-                                                FilledTonalIconButton(
+                                                /* Refuse */
+                                                OutlinedButton(
                                                     onClick = {
                                                         scope.launch(Dispatchers.IO) {
                                                             try {
                                                                 val client = HydraApi.getClient()
-                                                                val bodyJson = Gson().toJson(mapOf("requestState" to "REFUSED"))
-                                                                val rejectRequest = Request.Builder()
+                                                                val body = Gson().toJson(mapOf("requestState" to "REFUSED"))
+                                                                    .toRequestBody("application/json".toMediaTypeOrNull())
+                                                                val req = Request.Builder()
                                                                     .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}")
-                                                                    .patch(bodyJson.toRequestBody("application/json".toMediaTypeOrNull()))
+                                                                    .patch(body)
                                                                     .build()
-                                                                client.newCall(rejectRequest).execute().use {
+                                                                client.newCall(req).execute().use {
                                                                     if (it.isSuccessful) {
                                                                         withContext(Dispatchers.Main) { refreshProfile() }
                                                                     }
                                                                 }
                                                             } catch (e: Exception) { e.printStackTrace() }
                                                         }
-                                                    },
-                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.errorContainer
-                                                    )
+                                                    }
                                                 ) {
-                                                    Icon(Icons.Default.Close, contentDescription = "Recusar")
+                                                    Text("Recusar")
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
 
-                        // Solicitações Enviadas (apenas para meu perfil)
+                        /* ---- Outgoing Friend Requests ---- */
                         if (isMe && !friendRequests?.outgoing.isNullOrEmpty()) {
-                            Text(
-                                text = "Solicitações Enviadas",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 12.dp),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Text(text = "Solicitações Enviadas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 12.dp), color = MaterialTheme.colorScheme.onSurface)
 
                             friendRequests?.outgoing?.forEach { request ->
                                 val target = request.userB
@@ -813,33 +626,13 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-                                                AsyncImage(
-                                                    model = target.profileImageUrl,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(48.dp).clip(CircleShape),
-                                                    contentScale = ContentScale.Crop
-                                                )
+                                        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                AsyncImage(model = target.profileImageUrl, contentDescription = null, modifier = Modifier.size(48.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 Column {
-                                                    Text(
-                                                        text = target.displayName ?: "Usu\u00e1rio",
-                                                        style = MaterialTheme.typography.titleSmall,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                    Text(
-                                                        text = "Aguardando resposta...",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
+                                                    Text(text = target.displayName ?: "Usuário", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                    Text(text = "Aguardando resposta...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                                 }
                                             }
                                             IconButton(
@@ -847,23 +640,20 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                                     scope.launch(Dispatchers.IO) {
                                                         try {
                                                             val client = HydraApi.getClient()
-                                                            val cancelRequest = Request.Builder()
+                                                            val cancelReq = Request.Builder()
                                                                 .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests/${request.id}")
                                                                 .delete()
                                                                 .build()
-                                                            client.newCall(cancelRequest).execute().use {
+                                                            client.newCall(cancelReq).execute().use {
                                                                 if (it.isSuccessful) {
                                                                     withContext(Dispatchers.Main) { refreshProfile() }
                                                                 }
                                                             }
                                                         } catch (e: Exception) { e.printStackTrace() }
                                                     }
-                                                },
-                                                colors = IconButtonDefaults.iconButtonColors(
-                                                    contentColor = MaterialTheme.colorScheme.error
-                                                )
+                                                }
                                             ) {
-                                                Icon(Icons.Default.Close, contentDescription = "Cancelar solicitação")
+                                                Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = MaterialTheme.colorScheme.error)
                                             }
                                         }
                                     }
@@ -871,50 +661,22 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             }
 
                             Spacer(modifier = Modifier.height(24.dp))
+                        }
 
+                        /* ---- Friends ---- */
                         if (!profile?.friends.isNullOrEmpty()) {
-                            Text(
-                                text = "Amigos (${profile?.friends?.size})",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(vertical = 12.dp),
-                                textAlign = TextAlign.Start
-                            )
-
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
+                            Text(text = "Amigos (${profile?.friends?.size})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(vertical = 12.dp), textAlign = TextAlign.Start)
+                            LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 items(profile?.friends ?: emptyList()) { friend ->
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .width(70.dp)
-                                            .clickable {
-                                                navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", friend.id ?: ""))
-                                            }
-                                    ) {
-                                        AsyncImage(
-                                            model = friend.profileImageUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(60.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        Text(
-                                            text = friend.displayName ?: "Amigo",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            textAlign = TextAlign.Center
-                                        )
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(70.dp).clickable { navController.navigate(MainActivityRoutes.Profile.route.replace("{userId}", friend.id ?: "")) }) {
+                                        AsyncImage(model = friend.profileImageUrl, contentDescription = null, modifier = Modifier.size(60.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                                        Text(text = friend.displayName ?: "Amigo", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                                     }
                                 }
                             }
                         }
 
+                        /* ---- Logout ---- */
                         if (isMe) {
                             Spacer(modifier = Modifier.height(48.dp))
                             OutlinedButton(
@@ -927,7 +689,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(Icons.Default.ExitToApp, contentDescription = null)
@@ -939,20 +701,12 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                     }
                 }
             } else {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(100.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
+                /* ---- Not logged in ---- */
+                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("Você não está logado.", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Faça login para sincronizar sua conta e acessar recursos exclusivos.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
+                Text("Faça login para sincronizar sua conta e acessar recursos exclusivos.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(32.dp))
                 Button(
                     onClick = {
@@ -963,11 +717,35 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                 ) {
                     Text("ENTRAR / REGISTRAR")
                 }
+                TextButton(onClick = {
+                    Settings.accessToken = ""
+                    Settings.refreshToken = ""
+                    Settings.userId = ""
+                    Settings.tokenExpiration = 0L
+                }) {
+                    Text("Limpar dados de login")
+                }
             }
         }
     }
 
+    /* ---- Add Friend Dialog ---- */
     if (showAddFriendDialog) {
+        val addFriend = { friendCode: String ->
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val client = HydraApi.getClient()
+                    val body = Gson().toJson(mapOf("friendCode" to friendCode))
+                        .toRequestBody("application/json".toMediaTypeOrNull())
+                    val request = Request.Builder()
+                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/friend-requests")
+                        .post(body)
+                        .build()
+                    client.newCall(request).execute().use { }
+                } catch (e: Exception) { e.printStackTrace() }
+            }
+        }
+
         AlertDialog(
             onDismissRequest = { showAddFriendDialog = false },
             title = { Text("Adicionar Amigo") },
@@ -991,17 +769,18 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
         )
     }
 
+    /* ---- Report Dialog ---- */
     if (showReportDialog) {
         AlertDialog(
             onDismissRequest = { showReportDialog = false },
             title = { Text("Denunciar Perfil") },
             text = {
                 Column {
-                    val reasons = listOf("hate", "sexual_content", "violence", "spam", "other")
-                    reasons.forEach { reason ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { reportReason = reason }) {
-                            RadioButton(selected = reportReason == reason, onClick = { reportReason = reason })
-                            Text(reason.replace("_", " ").replaceFirstChar { it.uppercase() })
+                    val reasons = listOf("hate" to "Ódio", "sexual_content" to "Conteúdo Sexual", "violence" to "Violência", "spam" to "Spam", "other" to "Outro")
+                    reasons.forEach { (value, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { reportReason = value }) {
+                            RadioButton(selected = reportReason == value, onClick = { reportReason = value })
+                            Text(label)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1016,7 +795,18 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
             },
             confirmButton = {
                 Button(onClick = {
-                    reportUser(reportReason, reportDescription)
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val client = HydraApi.getClient()
+                            val body = Gson().toJson(mapOf("reason" to reportReason, "description" to reportDescription))
+                                .toRequestBody("application/json".toMediaTypeOrNull())
+                            val request = Request.Builder()
+                                .url("https://hydra-api-us-east-1.losbroxas.org/users/${profile?.id}/report")
+                                .post(body)
+                                .build()
+                            client.newCall(request).execute().use { }
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
                     showReportDialog = false
                 }) { Text("Denunciar") }
             },
@@ -1031,133 +821,17 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
 fun StatCard(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, label: String) {
     ElevatedCard(
         modifier = Modifier.width(110.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.elevatedCardElevation(
-            defaultElevation = 4.dp,
-            pressedElevation = 8.dp
-        )
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp, pressedElevation = 8.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(48.dp)
-            ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(48.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
                 }
             }
-            Text(
-                value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-private fun handleImageUpload(
-    uri: Uri,
-    isProfileImage: Boolean,
-    context: android.content.Context,
-    scope: kotlinx.coroutines.CoroutineScope,
-    onSuccess: (HydraProfile) -> Unit
-) {
-    scope.launch(Dispatchers.IO) {
-        try {
-            val contentResolver = context.contentResolver
-            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch
-            val fileName = uri.lastPathSegment ?: "image.png"
-            val extension = if (fileName.contains(".")) fileName.substringAfterLast(".") else "png"
-
-            val client = HydraApi.getClient()
-            val gson = Gson()
-
-            // 1. Get Presigned URL
-            val presignedEndpoint = if (isProfileImage) "/presigned-urls/profile-image" else "/presigned-urls/background-image"
-            val presignedBody = mapOf(
-                "imageExt" to extension,
-                "imageLength" to bytes.size
-            )
-            val presignedRequest = Request.Builder()
-                .url("https://hydra-api-us-east-1.losbroxas.org$presignedEndpoint")
-                .post(gson.toJson(presignedBody).toRequestBody("application/json".toMediaTypeOrNull()))
-                .build()
-
-            val responseData = client.newCall(presignedRequest).execute().use { response ->
-                if (response.isSuccessful) {
-                    gson.fromJson(response.body?.string(), Map::class.java)
-                } else null
-            } ?: return@launch
-
-            val presignedUrl = responseData["presignedUrl"] as? String ?: return@launch
-            val finalImageUrl = (if (isProfileImage) responseData["profileImageUrl"] else responseData["backgroundImageUrl"]) as? String
-                ?: presignedUrl.substringBefore("?")
-
-            // 2. Upload binary data to Presigned URL
-            val mimeType = contentResolver.getType(uri) ?: "image/png"
-            val uploadRequest = Request.Builder()
-                .url(presignedUrl)
-                .put(bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
-                .build()
-
-            val uploadSuccess = client.newCall(uploadRequest).execute().use { it.isSuccessful }
-
-            if (uploadSuccess) {
-                // 3. Update Profile with the final URL
-                val patchBody = if (isProfileImage) {
-                    mapOf("profileImageUrl" to finalImageUrl)
-                } else {
-                    mapOf("backgroundImageUrl" to finalImageUrl)
-                }
-
-                val patchRequest = Request.Builder()
-                    .url("https://hydra-api-us-east-1.losbroxas.org/profile")
-                    .patch(gson.toJson(patchBody).toRequestBody("application/json".toMediaTypeOrNull()))
-                    .build()
-
-                val patchSuccess = client.newCall(patchRequest).execute().use { it.isSuccessful }
-
-                if (patchSuccess) {
-                    // Refresh Profile to get updated data
-                    val refreshRequest = Request.Builder()
-                        .url("https://hydra-api-us-east-1.losbroxas.org/profile/me")
-                        .build()
-                    client.newCall(refreshRequest).execute().use { refreshResponse ->
-                        if (refreshResponse.isSuccessful) {
-                            val newProfile = gson.fromJson(refreshResponse.body?.string(), HydraProfile::class.java)
-
-                            Settings.updateFromProfile(newProfile)
-
-                            withContext(Dispatchers.Main) {
-                                onSuccess(newProfile)
-                            }
-                        }
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            e.printStackTrace()
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
     }
 }
