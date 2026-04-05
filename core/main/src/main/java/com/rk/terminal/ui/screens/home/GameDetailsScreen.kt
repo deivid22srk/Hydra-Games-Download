@@ -107,9 +107,9 @@ fun GameDetailsScreen(
 
     val scope = rememberCoroutineScope()
 
-    val loadReviews = { sortBy: String ->
-        val shop = gameShop ?: return@loadReviews
-        val objId = gameObjectId ?: return@loadReviews
+    fun loadReviews(sortBy: String) {
+        val shop = gameShop ?: return
+        val objId = gameObjectId ?: return
         scope.launch(Dispatchers.IO) {
             val client = HydraApi.getClient()
             val gson = Gson()
