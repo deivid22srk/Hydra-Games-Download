@@ -31,6 +31,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.rk.settings.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
