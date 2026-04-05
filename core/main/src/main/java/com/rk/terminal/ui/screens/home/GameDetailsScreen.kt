@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.LibraryAddCheck
@@ -90,7 +91,9 @@ fun GameDetailsScreen(
     var isSearchingSources by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
     var isAddingToLibrary by remember { mutableStateOf(false) }
+    var isRemovingFromLibrary by remember { mutableStateOf(false) }
     var isAlreadyInLibrary by remember { mutableStateOf(false) }
+    var showLibraryMenu by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -334,6 +337,70 @@ fun GameDetailsScreen(
         }
     }
 
+    val removeFromLibrary = {
+        if (!isRemovingFromLibrary && gameObjectId != null && gameShop != null) {
+            isRemovingFromLibrary = true
+            scope.launch(Dispatchers.IO) {
+                try {
+                    HydraApi.revalidateSession()
+
+                    if (Settings.accessToken.isBlank()) {
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(mainActivity, "Sessão expirada.", android.widget.Toast.LENGTH_SHORT).show()
+                            isRemovingFromLibrary = false
+                        }
+                        return@launch
+                    }
+
+                    val client = HydraApi.getClient()
+                    // DELETE /profile/games/{objectId} — same as HydraPc
+                    val url = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$objectId"
+                    val request = Request.Builder()
+                        .url(url)
+                        .delete()
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            withContext(Dispatchers.Main) {
+                                isAlreadyInLibrary = false
+                                android.widget.Toast.makeText(mainActivity, "Removido da biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                                android.util.Log.d("LibraryRemove", "Game removed: objectId=$objectId, shop=$gameShop")
+                            }
+                        } else {
+                            val errorBody = response.body?.string()?.take(300)
+                            val httpCode = response.code
+                            android.util.Log.e("LibraryRemove", "Failed with $httpCode: $errorBody")
+
+                            val message = when (httpCode) {
+                                401 -> "Sessão expirada. Faça login novamente."
+                                404 -> "Jogo não encontrado na biblioteca."
+                                else -> "Erro ao remover: HTTP $httpCode"
+                            }
+                            if (httpCode == 401) {
+                                Settings.accessToken = ""
+                                Settings.refreshToken = ""
+                                Settings.userId = ""
+                                Settings.tokenExpiration = 0L
+                            }
+                            withContext(Dispatchers.Main) {
+                                android.widget.Toast.makeText(mainActivity, message, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("LibraryRemove", "Network error", e)
+                    e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(mainActivity, "Falha na rede: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } finally {
+                    withContext(Dispatchers.Main) { isRemovingFromLibrary = false }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -345,18 +412,50 @@ fun GameDetailsScreen(
                 },
                 actions = {
                     if (Settings.userId.isNotBlank()) {
-                        IconButton(
-                            onClick = { if (!isAlreadyInLibrary) addToLibrary() },
-                            enabled = !isAddingToLibrary
-                        ) {
-                            if (isAddingToLibrary) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Box {
+                            if (!isAlreadyInLibrary) {
+                                IconButton(
+                                    onClick = { addToLibrary() },
+                                    enabled = !isAddingToLibrary
+                                ) {
+                                    if (isAddingToLibrary) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.LibraryAdd,
+                                            contentDescription = "Adicionar à Biblioteca",
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             } else {
-                                Icon(
-                                    imageVector = if (isAlreadyInLibrary) Icons.Default.LibraryAddCheck else Icons.Default.LibraryAdd,
-                                    contentDescription = if (isAlreadyInLibrary) "Na Biblioteca" else "Adicionar à Biblioteca",
-                                    tint = if (isAlreadyInLibrary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
+                                IconButton(
+                                    onClick = { showLibraryMenu = true },
+                                    enabled = !isRemovingFromLibrary
+                                ) {
+                                    if (isRemovingFromLibrary) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.LibraryAddCheck,
+                                            contentDescription = "Na Biblioteca",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = showLibraryMenu,
+                                    onDismissRequest = { showLibraryMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Remover da biblioteca") },
+                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                        onClick = {
+                                            showLibraryMenu = false
+                                            removeFromLibrary()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
