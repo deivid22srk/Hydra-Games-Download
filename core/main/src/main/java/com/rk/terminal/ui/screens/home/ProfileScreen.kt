@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -368,7 +369,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                         Text(text = profile?.displayName ?: "Usuário Hydra", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                         profile?.id?.let { id ->
                             Text(text = "@$id", style = MaterialTheme.typography.bodySmall, color = SubtleTextColor)
-                            CopyIdChip(id, clipboardManager)
+                            CopyIdChip(id, clipboardManager, context)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
@@ -420,7 +421,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             EmptyStateText("Nenhuma solicitação de amizade recebida")
                         } else {
                             incomingRequests.forEach { req ->
-                                IncomingRequestCard(req, ::handleAcceptRequest, ::handleDeclineRequest)
+                                IncomingRequestCard(req, { handleAcceptRequest(it) }, { handleDeclineRequest(it) })
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
@@ -432,7 +433,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                             EmptyStateText("Nenhuma solicitação enviada")
                         } else {
                             outgoingRequests.forEach { req ->
-                                OutgoingRequestCard(req, ::handleCancelOutgoingRequest)
+                                OutgoingRequestCard(req, { handleCancelOutgoingRequest(it) })
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
@@ -571,11 +572,11 @@ private fun ProfileBanner(profile: HydraProfile?) {
 }
 
 @Composable
-private fun CopyIdChip(id: String, clipboard: androidx.compose.ui.platform.ClipboardManager) {
+private fun CopyIdChip(id: String, clipboard: androidx.compose.ui.platform.ClipboardManager, context: android.content.Context) {
     Surface(
         onClick = {
             clipboard.setText(AnnotatedString(id))
-            android.widget.Toast.makeText(LocalContext.current, "ID copiado!", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, "ID copiado!", android.widget.Toast.LENGTH_SHORT).show()
         },
         shape = RoundedCornerShape(20.dp),
         color = CardBg,
