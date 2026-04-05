@@ -107,6 +107,25 @@ fun GameDetailsScreen(
 
     val scope = rememberCoroutineScope()
 
+    val loadReviews = { sortBy: String ->
+        if (gameShop == null || gameObjectId == null) return@loadReviews
+        scope.launch(Dispatchers.IO) {
+            val client = HydraApi.getClient()
+            val gson = Gson()
+            val reviewsUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$gameShop/$gameObjectId/reviews?take=20&skip=0&sortBy=$sortBy"
+            client.newCall(Request.Builder().url(reviewsUrl).build()).execute().use { response ->
+                if (response.isSuccessful) {
+                    val reviewsResp = gson.fromJson(response.body?.string(), HydraReviewsResponse::class.java)
+                    withContext(Dispatchers.Main) {
+                        hydraReviews = reviewsResp.reviews ?: emptyList()
+                        allReviews = reviewsResp.reviews ?: emptyList()
+                        totalReviewsCount = reviewsResp.totalCount ?: 0
+                    }
+                }
+            }
+        }
+    }
+
     LaunchedEffect(gameTitle, gameObjectId, gameShop) {
         if (gameObjectId != null && gameShop != null) {
             isSearchingSources = true
@@ -200,12 +219,7 @@ fun GameDetailsScreen(
                     }
 
                     // Hydra Reviews - initial batch
-                    loadReviews(client, gson, gameShop, gameObjectId, sortBy = reviewSort,
-                        onSuccess = { reviews, total ->
-                            hydraReviews = reviews
-                            allReviews = reviews
-                            totalReviewsCount = total
-                        })
+                    withContext(Dispatchers.Main) { loadReviews(reviewSort) }
 
                     // Check if user has reviewed
                     if (Settings.accessToken.isNotBlank()) {
@@ -421,23 +435,6 @@ fun GameDetailsScreen(
     }
 
     /* ------------ review helpers ------------ */
-    fun loadReviews(
-        client: okhttp3.OkHttpClient,
-        gson: Gson,
-        shop: String?,
-        objectId: String?,
-        sortBy: String,
-        onSuccess: (List<HydraReview>, Int) -> Unit
-    ) {
-        if (shop == null || objectId == null) return
-        val reviewsUrl = "https://hydra-api-us-east-1.losbroxas.org/games/$shop/$objectId/reviews?take=20&skip=0&sortBy=$sortBy"
-        client.newCall(Request.Builder().url(reviewsUrl).build()).execute().use { response ->
-            if (response.isSuccessful) {
-                val reviewsResp = gson.fromJson(response.body?.string(), HydraReviewsResponse::class.java)
-                onSuccess(reviewsResp.reviews ?: emptyList(), reviewsResp.totalCount ?: 0)
-            }
-        }
-    }
 
     val handleVote = { reviewId: String, isUpvote: Boolean ->
         scope.launch(Dispatchers.IO) {
@@ -484,23 +481,17 @@ fun GameDetailsScreen(
                 val req = Request.Builder().url(url).delete().build()
                 client.newCall(req).execute().use { response ->
                     if (response.isSuccessful) {
-                        withContext(Dispatchers.Main) {
-                            showConfirmDeleteReview = false
-                            hasUserReviewed = false
-                            loadReviews(HydraApi.getClient(), Gson(), gameShop, gameObjectId, reviewSort) { reviews, total ->
-                                hydraReviews = reviews
-                                allReviews = reviews
-                                totalReviewsCount = total
-                            }
-                            android.widget.Toast.makeText(mainActivity, "Avaliação removida!", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        hasUserReviewed = false
+                        showConfirmDeleteReview = false
+                        loadReviews(reviewSort)
+                        android.widget.Toast.makeText(mainActivity, "Avaliação removida!", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
-    val handleCreateReview = { reviewHtml: String, score: Int ->
+    val handleCreateReview: (String, Int) -> Unit = { reviewHtml: String, score: Int ->
         scope.launch(Dispatchers.IO) {
             try {
                 val client = HydraApi.getClient()
@@ -510,20 +501,12 @@ fun GameDetailsScreen(
                 val req = Request.Builder().url(url).post(body).build()
                 client.newCall(req).execute().use { response ->
                     if (response.isSuccessful) {
-                        withContext(Dispatchers.Main) {
-                            showReviewFormDialog = false
-                            hasUserReviewed = true
-                            loadReviews(HydraApi.getClient(), Gson(), gameShop, gameObjectId, reviewSort) { reviews, total ->
-                                hydraReviews = reviews
-                                allReviews = reviews
-                                totalReviewsCount = total
-                            }
-                            android.widget.Toast.makeText(mainActivity, "Avaliação enviada!", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        showReviewFormDialog = false
+                        hasUserReviewed = true
+                        loadReviews(reviewSort)
+                        android.widget.Toast.makeText(mainActivity, "Avaliação enviada!", android.widget.Toast.LENGTH_SHORT).show()
                     } else {
-                        withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(mainActivity, "Erro ao enviar avaliação: HTTP ${response.code}", android.widget.Toast.LENGTH_LONG).show()
-                        }
+                        android.widget.Toast.makeText(mainActivity, "Erro ao enviar avaliação: HTTP ${response.code}", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) { e.printStackTrace() }
@@ -785,13 +768,7 @@ fun GameDetailsScreen(
                                 selected = reviewSort == sortByVal,
                                 onClick = {
                                     reviewSort = sortByVal
-                                    scope.launch(Dispatchers.IO) {
-                                        loadReviews(HydraApi.getClient(), Gson(), gameShop, gameObjectId, reviewSort) { reviews, total ->
-                                            hydraReviews = reviews
-                                            allReviews = reviews
-                                            totalReviewsCount = total
-                                        }
-                                    }
+                                    loadReviews(reviewSort)
                                 },
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                                 modifier = Modifier.height(32.dp)
