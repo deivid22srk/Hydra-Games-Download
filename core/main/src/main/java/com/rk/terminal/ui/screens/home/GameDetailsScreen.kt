@@ -254,16 +254,26 @@ fun GameDetailsScreen(
 
     val addToLibrary = {
         if (!isAddingToLibrary && gameObjectId != null && gameShop != null) {
+            // Check login state before attempting
+            if (Settings.userId.isBlank() || Settings.accessToken.isBlank()) {
+                android.widget.Toast.makeText(mainActivity, "Faça login para adicionar jogos à biblioteca", android.widget.Toast.LENGTH_SHORT).show()
+                return@addToLibrary
+            }
             isAddingToLibrary = true
             scope.launch(Dispatchers.IO) {
                 try {
+                    // Revalidate session first to ensure fresh token
+                    HydraApi.revalidateSession()
+
+                    if (Settings.accessToken.isBlank()) {
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(mainActivity, "Sessão expirada. Faça login novamente.", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        return@launch
+                    }
+
                     val client = HydraApi.getClient()
                     val gson = Gson()
-
-                    // The Hydra API expects objectId and shop as path parameters for PUT
-                    // Or objectId and shop in the body for POST.
-                    // Investigating PC version, it usually uses PUT /profile/games/{shop}/{objectId}
-                    // to track/add games.
 
                     val body = mapOf(
                         "objectId" to gameObjectId,
@@ -272,10 +282,10 @@ fun GameDetailsScreen(
                         "lastTimePlayed" to null
                     )
 
-                    // Standard addition endpoint
+                    val requestBody = gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull())
                     val request = Request.Builder()
                         .url("https://hydra-api-us-east-1.losbroxas.org/profile/games")
-                        .post(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
+                        .post(requestBody)
                         .build()
 
                     client.newCall(request).execute().use { response ->
@@ -283,13 +293,15 @@ fun GameDetailsScreen(
                             withContext(Dispatchers.Main) {
                                 isAlreadyInLibrary = true
                                 android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                                android.util.Log.d("LibraryAdd", "Game added: objectId=$gameObjectId, shop=$gameShop")
                             }
                         } else {
                             // Try the PUT variant used for synchronization/tracking
                             val syncUrl = "https://hydra-api-us-east-1.losbroxas.org/profile/games/$gameShop/$gameObjectId"
+                            val bodyStr = gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull())
                             val syncRequest = Request.Builder()
                                 .url(syncUrl)
-                                .put(gson.toJson(body).toRequestBody("application/json".toMediaTypeOrNull()))
+                                .put(bodyStr)
                                 .build()
 
                             client.newCall(syncRequest).execute().use { syncResponse ->
@@ -297,15 +309,33 @@ fun GameDetailsScreen(
                                     if (syncResponse.isSuccessful) {
                                         isAlreadyInLibrary = true
                                         android.widget.Toast.makeText(mainActivity, "Adicionado à biblioteca!", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.util.Log.d("LibraryAdd", "Game added (PUT): objectId=$gameObjectId, shop=$gameShop")
                                     } else {
-                                        val errorMsg = syncResponse.body?.string() ?: "Erro desconhecido"
-                                        android.widget.Toast.makeText(mainActivity, "Erro ao adicionar: ${syncResponse.code}", android.widget.Toast.LENGTH_SHORT).show()
+                                        val errorBody = syncResponse.body?.string() ?: "Erro desconhecido"
+                                        val httpCode = syncResponse.code
+                                        android.util.Log.e("LibraryAdd", "Failed with $httpCode: $errorBody")
+
+                                        val message = when (httpCode) {
+                                            401 -> "Sessão expirada. Faça login novamente."
+                                            403 -> "Sem permissão para adicionar este jogo."
+                                            404 -> "Jogo não encontrado na API."
+                                            409 -> "Jogo já está na biblioteca."
+                                            else -> "Erro ao adicionar: HTTP $httpCode"
+                                        }
+                                        if (httpCode == 401) {
+                                            Settings.accessToken = ""
+                                            Settings.refreshToken = ""
+                                            Settings.userId = ""
+                                            Settings.tokenExpiration = 0L
+                                        }
+                                        android.widget.Toast.makeText(mainActivity, message, android.widget.Toast.LENGTH_LONG).show()
                                     }
                                 }
                             }
                         }
                     }
                 } catch (e: Exception) {
+                    android.util.Log.e("LibraryAdd", "Network error", e)
                     e.printStackTrace()
                     withContext(Dispatchers.Main) {
                         android.widget.Toast.makeText(mainActivity, "Falha na rede: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
