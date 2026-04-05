@@ -345,11 +345,12 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
     ) { padding ->
         if (isLoggedIn) {
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else {
                 ProfileContent(
+                    modifier = Modifier.padding(padding),
                     profile = profile, isMe = isMe, isEditing = isEditing,
                     editDisplayName = editDisplayName, editBio = editBio,
                     onEditDisplayNameChange = { editDisplayName = it },
@@ -374,7 +375,7 @@ fun ProfileScreen(navController: NavController, userIdArg: String? = null) {
                     onPickBackground = openBackgroundPicker
                 )
             }
-        } else { NotLoggedInCard(context) }
+        } else { Box(modifier = Modifier.fillMaxSize().padding(padding)) { NotLoggedInCard(context) } }
     }
 
     if (showAddFriendDialog) {
@@ -705,6 +706,7 @@ private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int,
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProfileContent(
+    modifier: Modifier = Modifier,
     profile: HydraProfile?, isMe: Boolean, isEditing: Boolean,
     editDisplayName: String, editBio: String,
     onEditDisplayNameChange: (String) -> Unit, onEditBioChange: (String) -> Unit,
@@ -721,7 +723,7 @@ private fun ProfileContent(
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
         item { ProfileBanner(profile, isMe, surfaceVariant, onPickBackground, onPickAvatar) }
