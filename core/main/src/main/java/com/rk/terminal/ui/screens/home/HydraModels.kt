@@ -75,19 +75,19 @@ data class HydraFriend(
     @SerializedName("profileImageUrl") val profileImageUrl: String? = null
 )
 
-data class HydraFriendRequest(
+/**
+ * Formato real que a API retorna para /profile/friend-requests:
+ * [{"id": "xxx", "displayName": "John", "profileImageUrl": "...", "type": "RECEIVED"}]
+ */
+data class FriendRequestItem(
     @SerializedName("id") val id: String? = null,
-    @SerializedName("AId") val AId: String? = null,
-    @SerializedName("BId") val BId: String? = null,
-    @SerializedName("status") val status: String? = null,
-    @SerializedName("createdAt") val createdAt: String? = null,
-    @SerializedName("A") val userA: HydraFriend? = null,
-    @SerializedName("B") val userB: HydraFriend? = null
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("profileImageUrl") val profileImageUrl: String? = null,
+    @SerializedName("type") val type: String? = null // "SENT" | "RECEIVED"
 )
 
-data class HydraFriendRequestsResponse(
-    @SerializedName("incoming") val incoming: List<HydraFriendRequest>? = null,
-    @SerializedName("outgoing") val outgoing: List<HydraFriendRequest>? = null
+data class FriendRequestActionPayload(
+    @SerializedName("requestState") val requestState: String
 )
 
 data class HydraBadge(
