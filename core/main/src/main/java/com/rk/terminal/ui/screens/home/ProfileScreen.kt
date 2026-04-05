@@ -498,14 +498,17 @@ private fun CropImageDialog(
     onCrop: (ByteArray, String) -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isCropping by remember { mutableStateOf(false) }
+
     LaunchedEffect(imageUri) {
         withContext(Dispatchers.IO) {
             try {
                 val opts = BitmapFactory.Options()
                 opts.inJustDecodeBounds = true
                 context.contentResolver.openInputStream(imageUri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-                val maxDim = context.resources.displayMetrics.widthPixels.coerceAtMost(1200)
+                val maxDim = context.resources.displayMetrics.widthPixels
                 opts.inSampleSize = calculateInSampleSize(opts, maxDim, maxDim)
                 opts.inJustDecodeBounds = false
                 context.contentResolver.openInputStream(imageUri)?.use {
@@ -540,7 +543,8 @@ private fun CropImageDialog(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                     Text(
-                        text = "Arraste e pinche para ajustar o recorte",
+                        text = if (cropType == "avatar") "Recorte circular — arraste para ajustar"
+                               else "Recorte banner (16:6) — arraste para ajustar",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
@@ -593,50 +597,52 @@ private fun CropImageDialog(
                                 contentScale = ContentScale.Fit
                             )
 
-                            // Overlay with transparent hole
+                            // Overlay with crop region
                             Canvas(modifier = Modifier.matchParentSize()) {
                                 val size = this.size
-                                val cropSize = if (cropType == "avatar") {
-                                    minOf(size.width, size.height) * 0.7f
-                                } else {
-                                    minOf(size.width, size.height) * 0.65f
-                                }
-                                val left = (size.width - cropSize) / 2f
-                                val top = (size.height - cropSize) / 2f
-
-                                // Dimmed overlay
-                                drawRect(
-                                    color = Color(0f, 0f, 0f, 0.6f),
-                                    topLeft = Offset(0f, 0f),
-                                    size = size
-                                )
-                                // Crop rectangle (clear)
-                                drawRect(
-                                    color = Color.Transparent,
-                                    topLeft = Offset(left, top),
-                                    size = androidx.compose.ui.geometry.Size(cropSize, cropSize)
-                                )
-                                // Border
-                                drawRect(
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    topLeft = Offset(left, top),
-                                    size = androidx.compose.ui.geometry.Size(cropSize, cropSize),
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                                )
                                 if (cropType == "avatar") {
-                                    // Round mask hint
-                                    val center = Offset(left + cropSize / 2, top + cropSize / 2)
-                                    val radius = cropSize / 2
-                                    drawCircle(
-                                        color = Color.Transparent,
-                                        radius = radius,
-                                        center = center
+                                    val cropSize = minOf(size.width, size.height) * 0.7f
+                                    val left = (size.width - cropSize) / 2f
+                                    val top = (size.height - cropSize) / 2f
+
+                                    drawRect(
+                                        color = Color(0f, 0f, 0f, 0.6f),
+                                        topLeft = Offset(0f, 0f),
+                                        size = size
                                     )
                                     drawCircle(
-                                        color = Color.White.copy(alpha = 0.2f),
-                                        center = center,
-                                        radius = radius,
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                                        color = Color.Transparent,
+                                        radius = cropSize / 2,
+                                        center = Offset(left + cropSize / 2, top + cropSize / 2)
+                                    )
+                                    drawCircle(
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        center = Offset(left + cropSize / 2, top + cropSize / 2),
+                                        radius = cropSize / 2,
+                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                                    )
+                                } else {
+                                    // Banner crop: 16:6 (= 8:3 ≈ 2.67:1) aspect ratio
+                                    val bannerW = size.width * 0.92f
+                                    val bannerH = size.height * 0.45f
+                                    val left = (size.width - bannerW) / 2f
+                                    val top = (size.height - bannerH) / 2f
+
+                                    drawRect(
+                                        color = Color(0f, 0f, 0f, 0.6f),
+                                        topLeft = Offset(0f, 0f),
+                                        size = size
+                                    )
+                                    drawRect(
+                                        color = Color.Transparent,
+                                        topLeft = Offset(left, top),
+                                        size = androidx.compose.ui.geometry.Size(bannerW, bannerH)
+                                    )
+                                    drawRect(
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        topLeft = Offset(left, top),
+                                        size = androidx.compose.ui.geometry.Size(bannerW, bannerH),
+                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
                                     )
                                 }
                             }
@@ -652,6 +658,7 @@ private fun CropImageDialog(
                     ) {
                         OutlinedButton(
                             onClick = onDismiss,
+                            enabled = !isCropping,
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.extraLarge
                         ) {
@@ -659,25 +666,72 @@ private fun CropImageDialog(
                         }
                         Button(
                             onClick = {
+                                if (isCropping) return@Button
+                                isCropping = true
                                 val b = bitmap ?: return@Button
-                                val side = minOf(b.width, b.height)
-                                val x = (b.width - side) / 2
-                                val y = (b.height - side) / 2
-                                val cropped = Bitmap.createBitmap(b, x, y, side, side)
-                                val outSize = if (cropType == "avatar") 512 else 1200
-                                val resized = Bitmap.createScaledBitmap(cropped, outSize, outSize, true)
-                                if (cropped != b) cropped.recycle()
-                                val baos = ByteArrayOutputStream()
-                                resized.compress(Bitmap.CompressFormat.PNG, 95, baos)
-                                resized.recycle()
-                                onCrop(baos.toByteArray(), "png")
+                                scope.launch(Dispatchers.Default) {
+                                    try {
+                                        val (outWidth, outHeight) = if (cropType == "avatar") {
+                                            512 to 512
+                                        } else {
+                                            1920 to 720  // 16:6 aspect ratio for banner
+                                        }
+
+                                        val bW = b.width
+                                        val bH = b.height
+                                        val imgAspectRatio = bW.toFloat() / bH.toFloat()
+                                        val targetRatio = outWidth.toFloat() / outHeight.toFloat()
+
+                                        // Compute the crop rectangle in the original bitmap coordinates
+                                        val cropW: Int
+                                        val cropH: Int
+                                        if (imgAspectRatio > targetRatio) {
+                                            // Image is wider — match height, crop width
+                                            cropH = bH
+                                            cropW = (bH * targetRatio).toInt().coerceAtMost(bW)
+                                        } else {
+                                            // Image is taller — match width, crop height
+                                            cropW = bW
+                                            cropH = (bW / targetRatio).toInt().coerceAtMost(bH)
+                                        }
+                                        val cropX = (bW - cropW) / 2
+                                        val cropY = (bH - cropH) / 2
+
+                                        val cropped = Bitmap.createBitmap(b, cropX, cropY, cropW, cropH)
+                                        val resized = Bitmap.createScaledBitmap(cropped, outWidth, outHeight, true)
+                                        cropped.recycle()
+
+                                        val baos = ByteArrayOutputStream()
+                                        val format = if (cropType == "avatar") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                                        val quality = if (cropType == "avatar") 95 else 85
+                                        resized.compress(format, quality, baos)
+                                        resized.recycle()
+
+                                        withContext(Dispatchers.Main) {
+                                            onCrop(baos.toByteArray(), if (cropType == "avatar") "png" else "jpg")
+                                            isCropping = false
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("CropImageDialog", "crop error", e)
+                                        withContext(Dispatchers.Main) { isCropping = false }
+                                    }
+                                }
                             },
+                            enabled = !isCropping,
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.extraLarge
                         ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            if (isCropping) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            } else {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Confirmar")
+                            Text(if (isCropping) "Processando..." else "Confirmar")
                         }
                     }
                 }
